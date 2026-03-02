@@ -134,9 +134,11 @@ export const processInboundMessage = internalAction({
           ? `[MÓDULOS HABILITADOS - OBLIGATORIO]
 Este restaurante SOLO tiene habilitados: ${enabledList.join(", ")}. También puedes buscar en la base de conocimiento (menú, horarios, etc.).
 NO ofrezcas NUNCA servicios que no estén en la lista.
-- Si el cliente pide RESERVA y reservas NO está habilitado → responde: "Lo sentimos, este restaurante no ofrece reservas por WhatsApp. Te recomendamos contactar directamente al restaurante."
-- Si el cliente pide PEDIDO y pedidos NO está habilitado → responde: "Lo sentimos, no tomamos pedidos por este canal. Te recomendamos contactar directamente al restaurante."
-- Si el cliente pide QUEJA/RECLAMO/PQR y PQR NO está habilitado → responde: "Lo sentimos, no podemos recibir quejas o reclamos por este canal. Te recomendamos contactar directamente al restaurante."
+${!hasReservas ? `- Si el cliente pide RESERVA y reservas NO está habilitado → responde: "Lo sentimos, este restaurante no ofrece reservas por WhatsApp. Te recomendamos contactar directamente al restaurante."` : "- Si el cliente quiere hacer una RESERVA y reservas está habilitado, puedes crearla usando createReservationTool cuando tengas los datos completos."}
+${!hasPedidos ? `- Si el cliente pide PEDIDO y pedidos NO está habilitado → responde: "Lo sentimos, no tomamos pedidos por este canal. Te recomendamos contactar directamente al restaurante."` : "- Si el cliente quiere hacer un PEDIDO y pedidos está habilitado, toma el pedido normalmente y usa createOrderTool."}
+${!hasPqr
+    ? `- Si el cliente pide QUEJA/RECLAMO/PQR y PQR NO está habilitado → responde: "Lo sentimos, no podemos recibir quejas o reclamos por este canal. Te recomendamos contactar directamente al restaurante."`
+    : "- Si el cliente quiere hacer una PQR (petición, queja o reclamo) y PQR está habilitado, SIEMPRE registra la PQR usando createPQRTool. NUNCA digas que no puedes recibir quejas o reclamos por este canal."}
 
 [Fin MÓDULOS HABILITADOS]\n\n`
           : "";
