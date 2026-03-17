@@ -1,6 +1,7 @@
 import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { api, internal } from "../../../_generated/api";
+import { Id } from "../../../_generated/dataModel";
 
 /**
  * Registra una PQR (Petición, Queja, Reclamo, Sugerencia o Felicitación) desde el chat.
@@ -54,7 +55,30 @@ export const createPQR = createTool({
       return "Faltan asunto o descripción. Pide al cliente que los indique.";
     }
 
-    await ctx.runMutation(api.pqrs.create, {
+    // Rechazar datos genéricos que la IA haya inventado sin preguntarle al cliente
+    const GENERIC_SUBJECTS = [
+      "queja del cliente",
+      "reclamo del cliente",
+      "petición del cliente",
+      "sugerencia del cliente",
+      "felicitación del cliente",
+      "pqr del cliente",
+      "pqrs del cliente",
+      "solicitud del cliente",
+      "el cliente quiere",
+    ];
+    const subjectLower = subject.toLowerCase();
+    const isGenericSubject = GENERIC_SUBJECTS.some((g) =>
+      subjectLower.includes(g)
+    );
+    if (isGenericSubject || subject.length < 5) {
+      return "El asunto parece genérico o insuficiente. Debes preguntar al cliente '¿Cuál es el asunto de tu solicitud?' y esperar su respuesta antes de registrar la PQR.";
+    }
+    if (description.length < 10) {
+      return "La descripción es muy corta. Debes preguntar al cliente 'Por favor cuéntame en detalle qué pasó' y esperar su respuesta antes de registrar la PQR.";
+    }
+
+    const pqrId: Id<"pqrs"> = await ctx.runMutation(api.pqrs.create, {
       tenantId,
       type: args.type as "petition" | "complaint" | "claim" | "suggestion" | "compliment",
       customerName: args.customerName?.trim() || "Anónimo",
@@ -65,6 +89,10 @@ export const createPQR = createTool({
       source: "whatsapp",
     });
 
+    // Obtener el ticket number generado
+    const pqrDoc = await ctx.runQuery(api.pqrs.get, { pqrId });
+    const ticketNumber: string = pqrDoc?.ticketNumber ?? String(Date.now()).slice(-6);
+
     const TYPE_LABELS: Record<string, string> = {
       petition: "Petición",
       complaint: "Queja",
@@ -72,8 +100,8 @@ export const createPQR = createTool({
       suggestion: "Sugerencia",
       compliment: "Felicitación",
     };
-    const typeLabel = TYPE_LABELS[args.type] ?? args.type;
-    const msg = `He registrado tu ${typeLabel} correctamente.\n\nAsunto: ${subject}\n\nEl equipo del restaurante la revisará y te contactará si es necesario.\n\nGracias por tu mensaje. 🙏`;
+    const typeLabel: string = TYPE_LABELS[args.type] ?? args.type;
+    const msg: string = `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\nEl equipo del restaurante revisará tu caso y se contactará contigo si es necesario.\n\nGracias por tu mensaje. 🙏`;
 
     try {
       await ctx.runAction(api.ycloud.sendWhatsAppMessage, {

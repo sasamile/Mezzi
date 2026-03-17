@@ -57,6 +57,15 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const customerName = (args.customerName?.trim() || "Anónimo");
+
+    // Generar número de ticket legible: año + número secuencial del día
+    const date = new Date(now);
+    const yy = String(date.getFullYear()).slice(2);
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const seq = String(now).slice(-4); // últimos 4 dígitos del timestamp
+    const ticketNumber = `${yy}${mm}${dd}-${seq}`;
+
     const id = await ctx.db.insert("pqrs", {
       tenantId: args.tenantId,
       type: args.type,
@@ -67,6 +76,7 @@ export const create = mutation({
       description: args.description.trim(),
       status: "open",
       source: args.source,
+      ticketNumber,
       createdAt: now,
       updatedAt: now,
     });
@@ -83,7 +93,7 @@ export const sendPqrNotificationEmail = internalAction({
     if (!pqr) return;
     const tenant = await ctx.runQuery(api.tenants.get, { tenantId: pqr.tenantId });
     if (!tenant) return;
-    const emails = tenant.pqrNotificationEmails?.filter((e) => e?.trim()) ?? [];
+    const emails = tenant.pqrNotificationEmails?.filter((e: string) => e?.trim()) ?? [];
     if (emails.length === 0) return;
 
     const apiKey = process.env.BREVO_API_KEY;
@@ -129,7 +139,7 @@ export const sendPqrNotificationEmail = internalAction({
       },
       body: JSON.stringify({
         sender: { name: senderName, email: senderEmail },
-        to: emails.map((e) => ({ email: e.trim() })),
+        to: emails.map((e: string) => ({ email: e.trim() })),
         subject,
         htmlContent: html,
       }),

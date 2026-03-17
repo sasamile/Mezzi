@@ -176,13 +176,132 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         const today = now.toISOString().slice(0, 10);
         const timeHint = now.toTimeString().slice(0, 5);
         const dateTimeContext = `[Fecha y hora actual para interpretar "hoy" o "mañana": ${today}, aprox. ${timeHint}. Usa esta fecha cuando el cliente diga "hoy" o "para hoy.]\n\n`;
+        // Transcribir audio con Whisper si aplica
+        let resolvedText = args.text;
+        if (args.mediaType === "audio" && args.mediaUrl) {
+          try {
+            const audioRes = await fetch(args.mediaUrl);
+            if (audioRes.ok) {
+              const audioBuffer = await audioRes.arrayBuffer();
+              const formData = new FormData();
+              formData.append(
+                "file",
+                new Blob([audioBuffer], { type: "audio/ogg" }),
+                "audio.ogg"
+              );
+              formData.append("model", "whisper-1");
+              formData.append("language", "es");
+              const whisperRes = await fetch(
+                "https://api.openai.com/v1/audio/transcriptions",
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                  },
+                  body: formData,
+                }
+              );
+              if (whisperRes.ok) {
+                const whisperData = (await whisperRes.json()) as {
+                  text?: string;
+                };
+                if (whisperData.text?.trim()) {
+                  resolvedText = `[AUDIO TRANSCRITO: "${whisperData.text.trim()}"]`;
+                } else {
+                  resolvedText = "[AUDIO SIN TRANSCRIPCIÓN]";
+                }
+              } else {
+                resolvedText = "[AUDIO SIN TRANSCRIPCIÓN]";
+              }
+            } else {
+              resolvedText = "[AUDIO SIN TRANSCRIPCIÓN]";
+            }
+          } catch (err) {
+            console.warn("YCloud: transcripción de audio fallida", err);
+            resolvedText = "[AUDIO SIN TRANSCRIPCIÓN]";
+          }
+        }
+
+        // Contexto de imagen para prompt
+        const imageContext =
+          args.mediaType === "image" && args.mediaUrl
+            ? `[IMAGEN RECIBIDA - el cliente envió una foto]\n`
+            : "";
+
+        // Recuperar el último mensaje OUTBOUND real del bot.
+        // Usamos nuestra propia tabla `messages` (guardada en sendWhatsAppMessage)
+        // porque listMessages() pagina desde el más antiguo y en conversaciones
+        // largas el último mensaje real queda fuera de la primera página.
+        let lastAssistantText = "";
+        try {
+          const lastOutbound = await ctx.runQuery(
+            internal.messages.getLastOutboundMessage,
+            { conversationId }
+          );
+          if (lastOutbound) lastAssistantText = lastOutbound;
+        } catch {
+          // continúa sin contexto adicional
+        }
+
+        // Pre-interpretar respuestas numéricas (1-5) para eliminar ambigüedad.
+        // Si el último mensaje del asistente presentó una lista de opciones numeradas,
+        // reemplazamos el número por su texto correspondiente antes de enviarlo a la IA.
+        // Ej: "2" + último mensaje tenía "2️⃣ Anónimo" → se convierte en "2 (Anónimo)"
+        function resolveNumericResponse(
+          userText: string,
+          lastMsg: string
+        ): string {
+          const trimmed = userText.trim();
+          if (!/^[1-9]$/.test(trimmed)) return userText;
+          const num = parseInt(trimmed, 10);
+          const EMOJI_NUMS = [
+            "1️⃣",
+            "2️⃣",
+            "3️⃣",
+            "4️⃣",
+            "5️⃣",
+            "6️⃣",
+            "7️⃣",
+            "8️⃣",
+            "9️⃣",
+          ];
+          const targetEmoji = EMOJI_NUMS[num - 1] ?? "";
+          for (const line of lastMsg.split("\n")) {
+            const clean = line.trim();
+            // Formato emoji: "2️⃣ Anónimo"
+            if (targetEmoji && clean.startsWith(targetEmoji)) {
+              const optText = clean.slice(targetEmoji.length).trim();
+              if (optText) return `${trimmed} (${optText})`;
+            }
+            // Formato texto: "2. Texto" o "2) Texto"
+            const dotMatch = clean.match(
+              new RegExp(`^${num}[.)\\s]\\s*(.+)`)
+            );
+            if (dotMatch?.[1]?.trim()) {
+              return `${trimmed} (${dotMatch[1].trim()})`;
+            }
+          }
+          return userText;
+        }
+
+        const clientText = lastAssistantText
+          ? resolveNumericResponse(resolvedText, lastAssistantText)
+          : resolvedText;
+
+        const lastQuestionContext = lastAssistantText.trim()
+          ? `[TU ÚLTIMO MENSAJE AL CLIENTE:]\n"${lastAssistantText.trim()}"\n[El cliente respondió a ese mensaje. Su intención ya está indicada en el texto anterior.]\n\n`
+          : "";
+
         const promptWithContext =
           modulesContext +
           customerContext +
           dateTimeContext +
+          imageContext +
           (tenantPrompt?.prompt?.trim()
-            ? `[Contexto del restaurante - prioriza esto:]\n${tenantPrompt.prompt}\n\n[Cliente dice:]\n${args.text}`
-            : `[Cliente dice:]\n${args.text}`);
+            ? `[Contexto del restaurante:]\n${tenantPrompt.prompt}\n\n`
+            : "") +
+          lastQuestionContext +
+          `[Cliente dice:]\n${clientText}`;
 
         const tools: Record<string, unknown> = {
           searchTool: search,
@@ -203,11 +322,27 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         }
 
         let agentResult: Awaited<ReturnType<typeof supportAgent.generateText>> | null = null;
+        const isVisionMessage = args.mediaType === "image" && args.mediaUrl;
         try {
-          agentResult = await supportAgent.generateText(ctx, { threadId }, {
-            prompt: promptWithContext,
-            tools: tools as Parameters<typeof supportAgent.generateText>[2]["tools"],
-          });
+          if (isVisionMessage) {
+            agentResult = await supportAgent.generateText(ctx, { threadId }, {
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: promptWithContext },
+                    { type: "image", image: new URL(args.mediaUrl!) },
+                  ],
+                },
+              ],
+              tools: tools as Parameters<typeof supportAgent.generateText>[2]["tools"],
+            });
+          } else {
+            agentResult = await supportAgent.generateText(ctx, { threadId }, {
+              prompt: promptWithContext,
+              tools: tools as Parameters<typeof supportAgent.generateText>[2]["tools"],
+            });
+          }
         } catch (agentErr) {
           console.error("YCloud: generateText falló", {
             tenantId: args.tenantId,

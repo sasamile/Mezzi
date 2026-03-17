@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const listByConversation = query({
@@ -53,6 +53,25 @@ export const add = mutation({
       providerMessageId: args.providerMessageId,
       createdAt: now,
     });
+  },
+});
+
+/**
+ * Devuelve el contenido del último mensaje OUTBOUND (respuesta del bot) en la
+ * conversación indicada. Usado en ycloud.ts para resolver respuestas numéricas.
+ */
+export const getLastOutboundMessage = internalQuery({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId)
+      )
+      .order("desc")
+      .filter((q) => q.eq(q.field("direction"), "OUTBOUND"))
+      .first();
+    return msg?.content ?? null;
   },
 });
 

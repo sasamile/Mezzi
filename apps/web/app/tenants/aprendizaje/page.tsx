@@ -58,10 +58,9 @@ const DAILY_LIMIT = 2000;
 const HISTORY_STORAGE_PREFIX = "learning-history-";
 
 const SUGGESTIONS = [
-  "¿Cuáles son nuestros horarios?",
-  "¿Cuál es nuestra política de cancelación?",
-  "¿Qué promociones tenemos activas?",
-  "¿Cómo funciona el servicio a domicilio?",
+  "¿Con cuánto tiempo de anticipación debe llegar la mesera antes de su turno?",
+  "¿A quién debe entregar el reporte de ventas al cerrar el turno?",
+  "¿Qué elementos del uniforme son obligatorios según el procedimiento?",
 ];
 
 function formatDaysAgo(ts: number | null): string {

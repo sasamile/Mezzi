@@ -351,6 +351,7 @@ export default defineSchema({
     assignedTo: v.optional(v.id("users")),
     resolvedAt: v.optional(v.number()),
     resolutionNotes: v.optional(v.string()),
+    ticketNumber: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

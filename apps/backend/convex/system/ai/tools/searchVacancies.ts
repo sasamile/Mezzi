@@ -1,6 +1,7 @@
 import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { api, internal } from "../../../_generated/api";
+import { Doc } from "../../../_generated/dataModel";
 
 /**
  * Busca vacantes y ubicaciones de Trabaja con Nosotros.
@@ -45,11 +46,14 @@ export const searchVacancies = createTool({
       return "No hay vacantes registradas en este momento. Sugiere al cliente que consulte directamente con el restaurante o vuelva a preguntar más adelante.";
     }
 
-    const byCity = locations.reduce<Record<string, typeof locations>>((acc, loc) => {
-      if (!acc[loc.city]) acc[loc.city] = [];
-      acc[loc.city].push(loc);
-      return acc;
-    }, {});
+    const byCity = locations.reduce<Record<string, Doc<"jobLocations">[]>>(
+      (acc: Record<string, Doc<"jobLocations">[]>, loc: Doc<"jobLocations">) => {
+        if (!acc[loc.city]) acc[loc.city] = [];
+        acc[loc.city].push(loc);
+        return acc;
+      },
+      {}
+    );
 
     const lines: string[] = [
       "Vacantes abiertas por ciudad y sede:",
@@ -57,7 +61,10 @@ export const searchVacancies = createTool({
     ];
     for (const [city, locs] of Object.entries(byCity).sort()) {
       lines.push(`*${city}*`);
-      for (const loc of locs.sort((a, b) => a.mallName.localeCompare(b.mallName))) {
+      for (const loc of (locs as Doc<"jobLocations">[]).sort(
+        (a: Doc<"jobLocations">, b: Doc<"jobLocations">) =>
+          a.mallName.localeCompare(b.mallName)
+      )) {
         const name = loc.isPrincipal ? `${loc.mallName} (Principal)` : loc.mallName;
         const vacs = loc.vacancies.length ? loc.vacancies.join(", ") : "Sin vacantes específicas";
         lines.push(`- ${name}: ${vacs}`);
