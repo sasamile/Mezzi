@@ -5,6 +5,7 @@ import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import rag from "./system/ai/rag";
 import { SEARCH_INTERPRETER_PROMPT } from "./system/ai/constants";
+import { OPENAI_MODEL_PRIMARY } from "./system/ai/openaiModels";
 
 type Confidence = "high" | "medium" | "low";
 
@@ -52,7 +53,7 @@ export const ask = action({
           content: `Pregunta: ${q}\n\nBúsqueda: ${contextText}`,
         },
       ],
-      model: openai.chat("gpt-4o-mini"),
+      model: openai.chat(OPENAI_MODEL_PRIMARY),
     });
 
     const confidence: Confidence =

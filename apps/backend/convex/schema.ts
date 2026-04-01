@@ -235,6 +235,8 @@ export default defineSchema({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     tableNumber: v.optional(v.string()), // mesa solicitada
+    numberOfPeople: v.optional(v.number()), // cantidad de personas
+    notes: v.optional(v.string()),          // observaciones: cumpleaños, decoración, etc.
     source: v.union(
       v.literal("virtual"), // desde chat/WhatsApp
       v.literal("presencial") // en local
@@ -398,6 +400,15 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_city", ["tenantId", "city"]),
+
+  // PDFs enviables por WhatsApp (menú, decoraciones, promociones, etc.)
+  tenantPdfs: defineTable({
+    tenantId: v.id("tenants"),
+    label: v.string(),      // nombre visible: "Menú", "Decoraciones", "Promociones"...
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    updatedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
 
   // Uso diario del Centro de Aprendizaje (límite 2000 créditos/día por tenant)
   learningUsage: defineTable({

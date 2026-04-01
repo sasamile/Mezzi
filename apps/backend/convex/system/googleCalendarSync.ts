@@ -37,12 +37,15 @@ export const syncReservationToCalendar = internalAction({
 
     const calendarId = gc.calendarId ?? "primary";
     const timezone = "America/Bogota";
-    const summary = `Reserva: ${reservation.customerName}${reservation.tableNumber ? ` - Mesa ${reservation.tableNumber}` : ""}`;
+    const peopleStr = reservation.numberOfPeople ? ` · ${reservation.numberOfPeople} pax` : "";
+    const summary = `Reserva: ${reservation.customerName}${reservation.tableNumber ? ` - ${reservation.tableNumber}` : ""}${peopleStr}`;
     const description = [
       `Cliente: ${reservation.customerName}`,
       reservation.customerPhone ? `Tel: ${reservation.customerPhone}` : null,
       reservation.customerEmail ? `Email: ${reservation.customerEmail}` : null,
-      reservation.tableNumber ? `Mesa: ${reservation.tableNumber}` : null,
+      reservation.numberOfPeople ? `Personas: ${reservation.numberOfPeople}` : null,
+      reservation.tableNumber ? `Mesa/Zona: ${reservation.tableNumber}` : null,
+      reservation.notes ? `Notas: ${reservation.notes}` : null,
       `Origen: ${reservation.source === "virtual" ? "WhatsApp/Chat" : "Presencial"}`,
     ]
       .filter(Boolean)
@@ -51,22 +54,26 @@ export const syncReservationToCalendar = internalAction({
     const startDateTime = new Date(reservation.startTime).toISOString();
     const endDateTime = new Date(reservation.endTime).toISOString();
 
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          summary,
-          description,
-          start: { dateTime: startDateTime, timeZone: timezone },
-          end: { dateTime: endDateTime, timeZone: timezone },
-        }),
-      }
-    );
+    const eventBody = JSON.stringify({
+      summary,
+      description,
+      start: { dateTime: startDateTime, timeZone: timezone },
+      end: { dateTime: endDateTime, timeZone: timezone },
+    });
+
+    const existingId = reservation.googleEventId;
+    const url = existingId
+      ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(existingId)}`
+      : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+    const res = await fetch(url, {
+      method: existingId ? "PATCH" : "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: eventBody,
+    });
 
     if (!res.ok) {
       const err = await res.text();
@@ -75,7 +82,7 @@ export const syncReservationToCalendar = internalAction({
     }
 
     const event = (await res.json()) as { id?: string };
-    if (event?.id) {
+    if (!existingId && event?.id) {
       await ctx.runMutation(api.reservations.update, {
         reservationId: args.reservationId,
         googleEventId: event.id,

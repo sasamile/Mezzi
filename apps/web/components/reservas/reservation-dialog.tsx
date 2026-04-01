@@ -44,6 +44,8 @@ interface Reservation {
   startTime: number;
   endTime: number;
   tableNumber?: string;
+  numberOfPeople?: number;
+  notes?: string;
   status: ReservationStatus;
   source?: string;
   extraData?: string;
@@ -71,6 +73,10 @@ function parsePartySize(extraData?: string): number | null {
   } catch {
     return null;
   }
+}
+
+function resolvePartySize(numberOfPeople?: number, extraData?: string): number | null {
+  return numberOfPeople ?? parsePartySize(extraData);
 }
 
 function formatTime(ts: number) {
@@ -102,7 +108,7 @@ export function ReservationDialog({
 
   if (!reservation) return null;
 
-  const partySize = parsePartySize(reservation.extraData);
+  const partySize = resolvePartySize(reservation.numberOfPeople, reservation.extraData);
   const canConfirm = reservation.status === "pending" || !reservation.status;
   const canCancel = reservation.status !== "cancelled" && reservation.status !== "no_show";
   const canMarkNoShow = reservation.status !== "cancelled" && reservation.status !== "no_show";
@@ -186,6 +192,11 @@ export function ReservationDialog({
               <FileText className="size-4" />
               Origen: {formatSource(reservation.source)}
             </p>
+            {reservation.notes && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                📝 {reservation.notes}
+              </p>
+            )}
           </div>
 
           {/* Acciones rápidas */}

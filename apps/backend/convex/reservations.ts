@@ -106,6 +106,8 @@ export const create = mutation({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     tableNumber: v.optional(v.string()),
+    numberOfPeople: v.optional(v.number()),
+    notes: v.optional(v.string()),
     source: v.union(v.literal("virtual"), v.literal("presencial")),
     conversationId: v.optional(v.id("conversations")),
     extraData: v.optional(v.string()),
@@ -124,6 +126,8 @@ export const create = mutation({
       customerEmail: args.customerEmail,
       customerPhone: args.customerPhone,
       tableNumber: args.tableNumber,
+      numberOfPeople: args.numberOfPeople,
+      notes: args.notes,
       source: args.source,
       conversationId: args.conversationId,
       extraData: args.extraData,
@@ -131,10 +135,11 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    const peopleStr = args.numberOfPeople ? ` · ${args.numberOfPeople} personas` : "";
     await ctx.runMutation(api.activityLog.log, {
       tenantId: args.tenantId,
       type: "reservation_created",
-      message: `Nueva reserva: ${args.customerName}${args.tableNumber ? ` - Mesa ${args.tableNumber}` : ""}`,
+      message: `Nueva reserva: ${args.customerName}${args.tableNumber ? ` - Mesa ${args.tableNumber}` : ""}${peopleStr}`,
       reservationId,
       tableNumber: args.tableNumber,
       customerName: args.customerName,
@@ -156,6 +161,8 @@ export const update = mutation({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     tableNumber: v.optional(v.string()),
+    numberOfPeople: v.optional(v.number()),
+    notes: v.optional(v.string()),
     status: v.optional(
       v.union(
         v.literal("confirmed"),
@@ -189,13 +196,43 @@ export const update = mutation({
     if (updates.customerEmail !== undefined) clean.customerEmail = updates.customerEmail;
     if (updates.customerPhone !== undefined) clean.customerPhone = updates.customerPhone;
     if (updates.tableNumber !== undefined) clean.tableNumber = updates.tableNumber;
+    if (updates.numberOfPeople !== undefined) clean.numberOfPeople = updates.numberOfPeople;
+    if (updates.notes !== undefined) clean.notes = updates.notes;
     if (updates.status !== undefined) clean.status = updates.status;
     if (updates.confirmedAt !== undefined) clean.confirmedAt = updates.confirmedAt;
     if (updates.noShowAt !== undefined) clean.noShowAt = updates.noShowAt;
     if (updates.googleEventId !== undefined) clean.googleEventId = updates.googleEventId;
     clean.updatedAt = Date.now();
     await ctx.db.patch(reservationId, clean);
+    const calendarRelevant =
+      updates.startTime !== undefined ||
+      updates.endTime !== undefined ||
+      updates.customerName !== undefined ||
+      updates.customerPhone !== undefined ||
+      updates.customerEmail !== undefined ||
+      updates.numberOfPeople !== undefined ||
+      updates.tableNumber !== undefined ||
+      updates.notes !== undefined;
+    if (calendarRelevant && row.status !== "cancelled") {
+      await ctx.scheduler.runAfter(0, internal.system.googleCalendarSync.syncReservationToCalendar, {
+        tenantId: row.tenantId,
+        reservationId,
+      });
+    }
     return reservationId;
+  },
+});
+
+/** Reservas activas de esta conversación (WhatsApp), más recientes primero. */
+export const listActiveByConversation = query({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("reservations")
+      .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
+      .collect();
+    const active = rows.filter((r) => r.status === "confirmed" || r.status === "pending");
+    return active.sort((a, b) => b.startTime - a.startTime);
   },
 });
 
@@ -204,6 +241,12 @@ export const cancel = mutation({
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.reservationId);
     if (!row) throw new Error("Reserva no encontrada");
+    if (row.googleEventId) {
+      await ctx.scheduler.runAfter(0, internal.system.googleCalendarSync.deleteEventFromCalendar, {
+        tenantId: row.tenantId,
+        googleEventId: row.googleEventId,
+      });
+    }
     await ctx.db.patch(args.reservationId, {
       status: "cancelled",
       updatedAt: Date.now(),

@@ -90,8 +90,8 @@ export const importFromGoogle = action({
       startTime: args.timeMin,
       endTime: args.timeMax,
     });
-    const existingGoogleIds = new Set(
-      existingIds.filter((r) => r.googleEventId).map((r) => r.googleEventId)
+    const existingGoogleIds = new Set<string>(
+      existingIds.filter((r) => !!r.googleEventId).map((r) => r.googleEventId as string)
     );
 
     for (const ev of items) {

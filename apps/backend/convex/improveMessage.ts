@@ -2,6 +2,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { OPENAI_MODEL_PRIMARY } from "./system/ai/openaiModels";
 
 const IMPROVE_PROMPT = `Eres un asistente que mejora mensajes para atención al cliente por WhatsApp.
 
@@ -30,7 +31,7 @@ export const improve = action({
         { role: "system", content: IMPROVE_PROMPT },
         { role: "user", content: t },
       ],
-      model: openai.chat("gpt-4o-mini"),
+      model: openai.chat(OPENAI_MODEL_PRIMARY),
     });
 
     return text;

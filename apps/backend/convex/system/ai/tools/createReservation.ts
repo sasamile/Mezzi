@@ -9,14 +9,16 @@ import type { Doc } from "../../../_generated/dataModel";
  */
 export const createReservation = createTool({
   description:
-    "Crear una reserva. Úsala en cuanto tengas nombre, teléfono, fecha (YYYY-MM-DD; si el cliente dijo 'hoy' usa la fecha actual del contexto) y hora en 24h (ej. 16:31, 19:00). Opcional: tableNumber (ej. '305' si dijo 'la 305').",
+    "Crear una reserva. Úsala en cuanto tengas nombre, teléfono, fecha (YYYY-MM-DD; si el cliente dijo 'hoy' usa la fecha actual del contexto), hora en 24h (ej. 16:31, 19:00) y número de personas. Opcional: tableNumber (ej. 'Party 1', 'Mesa 4', 'Rooftop'), notes (cumpleaños, aniversario, decoración, etc.).",
   args: jsonSchema<{
     customerName: string;
-    customerPhone: string;
+    customerPhone?: string;
     customerEmail?: string;
-    date: string; // ISO date "2025-03-02"
-    time: string; // "16:31" o "19:00" (24h recomendado)
+    date: string;
+    time: string;
+    numberOfPeople: number;
     tableNumber?: string;
+    notes?: string;
     durationMinutes?: number;
   }>({
     type: "object",
@@ -26,10 +28,12 @@ export const createReservation = createTool({
       customerEmail: { type: "string", description: "Email del cliente (opcional)" },
       date: { type: "string", description: "Fecha YYYY-MM-DD (para 'hoy' usa la fecha actual indicada en el contexto)" },
       time: { type: "string", description: "Hora en 24h, ej. 16:31 o 19:00" },
-      tableNumber: { type: "string", description: "Mesa preferida (opcional), ej. 305" },
+      numberOfPeople: { type: "number", description: "Número de personas en la reserva" },
+      tableNumber: { type: "string", description: "Mesa o zona preferida (opcional), ej. 'Party 1', 'Mesa 4', 'Rooftop'" },
+      notes: { type: "string", description: "Observaciones opcionales: cumpleaños, aniversario, decoración, solicitudes especiales" },
       durationMinutes: { type: "number", description: "Duración en minutos (opcional, default 120)" },
     },
-    required: ["customerName", "customerPhone", "date", "time"],
+    required: ["customerName", "date", "time", "numberOfPeople"],
     additionalProperties: false,
   }),
   handler: async (ctx, args) => {
@@ -97,50 +101,55 @@ export const createReservation = createTool({
       return `Lo sentimos, el cupo de reservas por WhatsApp para ese día está completo (${maxVirtual}). Te sugiero llamar al restaurante para reservar en persona.`;
     }
 
+    console.log("createReservationTool: intentando crear reserva", {
+      tenantId,
+      customerName: args.customerName,
+      customerPhone: args.customerPhone,
+      date: args.date,
+      time: args.time,
+      numberOfPeople: args.numberOfPeople,
+      startTime,
+    });
+
     try {
       await ctx.runMutation(api.reservations.create, {
         tenantId,
         startTime,
         endTime,
         customerName: args.customerName.trim(),
-        customerPhone: args.customerPhone.trim(),
+        customerPhone: args.customerPhone?.trim() || undefined,
         customerEmail: args.customerEmail?.trim(),
         tableNumber: args.tableNumber?.trim(),
+        numberOfPeople: args.numberOfPeople,
+        notes: args.notes?.trim(),
         source: "virtual",
         conversationId,
       });
+      console.log("createReservationTool: reserva creada OK", { tenantId, startTime });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      return message;
+      console.error("createReservationTool: ERROR al crear reserva", { tenantId, startTime, message });
+      // Prefijo especial: ycloud.ts lo detecta para NO enviar directText del LLM
+      return `RESERVA_ERROR: La reserva NO fue guardada en el sistema. Error: ${message}. IMPORTANTE: NO envíes el mensaje de confirmación al cliente. Dile que hubo un problema técnico y que vuelva a intentarlo.`;
     }
 
-    // La sincronización con Google Calendar se programa en reservations.create
-
+    // Sincronización con Google Calendar se programa en reservations.create
     const formattedDate = startDate.toLocaleDateString("es-ES", {
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-    const formattedTime = startDate.toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const formattedTime = `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
 
-    let msg = `¡Reserva confirmada! Te esperamos el ${formattedDate} a las ${formattedTime}.`;
-    if (args.tableNumber) msg += ` Mesa: ${args.tableNumber}.`;
-    msg += " Si necesitas cambiar o cancelar, escríbenos.";
-
-    // Notificar al cliente por WhatsApp de inmediato (no depender de que el LLM repita el mensaje)
-    try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
-        tenantId,
-        conversationId,
-        content: msg,
-      });
-    } catch (e) {
-      // Si falla el envío (ej. YCloud no configurado), el return igual informa al agente
-    }
+    let msg = `RESERVA_OK: Reserva creada exitosamente.`;
+    msg += ` Nombre: ${args.customerName.trim()}.`;
+    msg += ` Fecha: ${args.date} (${formattedDate}).`;
+    msg += ` Hora: ${formattedTime}.`;
+    msg += ` Personas: ${args.numberOfPeople}.`;
+    if (args.tableNumber) msg += ` Mesa/Zona: ${args.tableNumber}.`;
+    if (args.notes) msg += ` Observaciones: ${args.notes}.`;
+    msg += " Ahora envía al cliente el mensaje de confirmación con todos estos datos.";
     return msg;
   },
 });

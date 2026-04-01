@@ -133,6 +133,7 @@ export const sendWhatsAppMedia = action({
     storageId: v.id("_storage"),
     mediaType: v.union(v.literal("image"), v.literal("audio"), v.literal("document")),
     caption: v.optional(v.string()),
+    fileName: v.optional(v.string()),
     contentType: v.optional(v.string()), // ej. audio/mp4, audio/ogg
     siteUrl: v.optional(v.string()), // URL base convex.site para proxy (audio)
   },
@@ -185,7 +186,11 @@ export const sendWhatsAppMedia = action({
       body.audio = { link: url };
     } else if (args.mediaType === "document") {
       body.type = "document";
-      body.document = { link: url, ...(args.caption ? { caption: args.caption } : {}) };
+      body.document = {
+        link: url,
+        ...(args.caption ? { caption: args.caption } : {}),
+        ...(args.fileName ? { filename: args.fileName } : {}),
+      };
     }
 
     const res = await fetch("https://api.ycloud.com/v2/whatsapp/messages", {

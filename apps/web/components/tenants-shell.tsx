@@ -132,6 +132,13 @@ export function TenantsShell({ children }: TenantsShellProps) {
       module: "conocimiento" as const,
     },
     {
+      href: `${baseHref}/menu`,
+      pageKey: "menu",
+      icon: "picture_as_pdf",
+      label: "Documentos PDF",
+      group: "Conocimiento",
+    },
+    {
       href: `${baseHref}/aprendizaje`,
       pageKey: "aprendizaje",
       icon: "school",

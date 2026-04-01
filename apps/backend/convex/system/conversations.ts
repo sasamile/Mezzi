@@ -131,7 +131,24 @@ export const getOrCreateForAgent = internalMutation({
       .first();
 
     if (existing) {
-      // Si ya tiene threadId, retornar
+      // Conversación cerrada y cliente vuelve a escribir → thread nuevo para evitar
+      // que el agente continúe el flujo anterior con contexto contaminado.
+      if (existing.status === "closed" && existing.threadId) {
+        const { threadId: newThreadId } = await supportAgent.createThread(ctx, {
+          userId: args.tenantId,
+        });
+        await ctx.db.patch(existing._id, {
+          threadId: newThreadId,
+          status: "open",
+          lastMessageAt: now,
+          updatedAt: now,
+          customerName: args.customerName,
+        });
+        await upsertCustomer(ctx, args.tenantId, args.externalContactId, args.customerName, now);
+        return { conversationId: existing._id, threadId: newThreadId };
+      }
+
+      // Si ya tiene threadId (y no está cerrada), retornar el mismo
       if (existing.threadId) {
         await ctx.db.patch(existing._id, {
           lastMessageAt: now,
@@ -142,7 +159,7 @@ export const getOrCreateForAgent = internalMutation({
         return { conversationId: existing._id, threadId: existing.threadId };
       }
 
-      // Crear thread y actualizar conversación
+      // Sin threadId aún → crear uno nuevo
       const { threadId } = await supportAgent.createThread(ctx, {
         userId: args.tenantId,
       });

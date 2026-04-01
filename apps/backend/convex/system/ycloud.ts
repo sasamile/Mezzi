@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { api } from "../_generated/api";
+import rag from "./ai/rag";
 import { supportAgent } from "./ai/agents/supportAgent";
 import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
@@ -12,12 +13,15 @@ import {
 import { setPriority } from "./ai/tools/setPriority";
 import { search } from "./ai/tools/search";
 import { createReservation } from "./ai/tools/createReservation";
+import { cancelReservation } from "./ai/tools/cancelReservation";
+import { updateReservation } from "./ai/tools/updateReservation";
 import { createPQR } from "./ai/tools/createPQR";
 import { searchVacancies } from "./ai/tools/searchVacancies";
 import { createOrder } from "./ai/tools/createOrder";
 import { updateOrder } from "./ai/tools/updateOrder";
 import { cancelOrder } from "./ai/tools/cancelOrder";
 import { updateCustomerInfo } from "./ai/tools/updateCustomerInfo";
+import { sendPdf } from "./ai/tools/sendPdf";
 import type { PaginationResult } from "convex/server";
 import type { MessageDoc } from "@convex-dev/agent";
 import { Id } from "../_generated/dataModel";
@@ -139,16 +143,16 @@ export const processInboundMessage = internalAction({
 
         const modulesContext = enabledList.length > 0
           ? `[MÓDULOS HABILITADOS - OBLIGATORIO]
-Este restaurante SOLO tiene habilitados: ${enabledList.join(", ")}. También puedes buscar en la base de conocimiento (menú, horarios, etc.).
-NO ofrezcas NUNCA servicios que no estén en la lista.
+Este restaurante tiene habilitados estos módulos transaccionales: ${enabledList.join(", ")}. También puedes buscar en la base de conocimiento (menú, horarios, sedes, etc.).
+NO uses herramientas de módulos que no estén habilitados (ej. no uses createOrderTool si pedidos no está habilitado). Sin embargo, SIEMPRE sigue las instrucciones del prompt del restaurante para flujos informativos (domicilios, preguntas frecuentes, etc.) aunque no sean un módulo habilitado.
 ${!hasReservas ? `- Si el cliente pide RESERVA y reservas NO está habilitado → responde: "Lo sentimos, este restaurante no ofrece reservas por WhatsApp. Te recomendamos contactar directamente al restaurante."` : "- Si el cliente quiere hacer una RESERVA y reservas está habilitado, puedes crearla usando createReservationTool cuando tengas los datos completos."}
-${!hasPedidos ? `- Si el cliente pide PEDIDO y pedidos NO está habilitado → responde: "Lo sentimos, no tomamos pedidos por este canal. Te recomendamos contactar directamente al restaurante."` : "- Si el cliente quiere hacer un PEDIDO y pedidos está habilitado, toma el pedido normalmente y usa createOrderTool."}
+${!hasPedidos ? `- PEDIDOS DIRECTOS: el módulo de pedidos NO está habilitado, por lo tanto NO puedes usar createOrderTool ni tomar pedidos directamente.\n- Sin embargo, si el cliente pregunta por DOMICILIOS, DELIVERY o quiere PEDIR algo, NO lo rechaces de inmediato. Sigue las instrucciones del prompt del restaurante (que puede tener un flujo de domicilios que recomienda sedes cercanas y redirige a Rappi u otro canal). Si el prompt del restaurante no tiene flujo de domicilios, entonces sí informa que no se toman pedidos por este canal y sugiere contactar al restaurante.` : "- Si el cliente quiere hacer un PEDIDO y pedidos está habilitado, toma el pedido normalmente y usa createOrderTool."}
 ${!hasPqr
     ? `- Si el cliente pide QUEJA/RECLAMO/PQR y PQR NO está habilitado → responde: "Lo sentimos, no podemos recibir quejas o reclamos por este canal. Te recomendamos contactar directamente al restaurante."`
     : "- Si el cliente quiere hacer una PQR (petición, queja o reclamo) y PQR está habilitado, SIEMPRE registra la PQR usando createPQRTool. NUNCA digas que no puedes recibir quejas o reclamos por este canal."}
 ${!hasTrabajaConNosotros
     ? `- Si el cliente pregunta por VACANTES/TRABAJO y trabaja con nosotros NO está habilitado → responde: "Lo sentimos, no tengo información de vacantes por este canal. Te recomendamos contactar directamente al restaurante."`
-    : "- Si el cliente pregunta por vacantes o quiere trabajar: primero llama searchVacanciesTool para ver qué hay. Si quiere postularse y ya dio nombre, email, ciudad/sede y puesto → llama applyForJobTool."}
+    : "- Si el cliente pregunta por vacantes o quiere trabajar: llama searchVacanciesTool y responde con correos/enlaces que devuelva la herramienta. No hay herramienta de postulación automática en el sistema."}
 
 [Fin MÓDULOS HABILITADOS]\n\n`
           : "";
@@ -156,6 +160,15 @@ ${!hasTrabajaConNosotros
         const tenantPrompt = await ctx.runQuery(api.prompts.getDefault, {
           tenantId: args.tenantId,
         });
+
+        // PDFs configurados del restaurante (para que el agente sepa qué puede enviar)
+        const availablePdfs = await ctx.runQuery(api.pdfs.list, {
+          tenantId: args.tenantId,
+        });
+        const pdfsContext =
+          availablePdfs && availablePdfs.length > 0
+            ? `[PDFs DISPONIBLES PARA ENVIAR]\nPuedes enviar los siguientes documentos usando sendPdfTool con el label exacto:\n${availablePdfs.map((p: { label: string }) => `- "${p.label}"`).join("\n")}\nREGLA PRIORITARIA:\n- Si el cliente pide menú, decoraciones, promociones o cualquier documento disponible, usa sendPdfTool.\n- Si existe un PDF que coincida con lo pedido, NO compartas enlaces externos (Drive, etc.). Envía el PDF configurado en este módulo.\n[Fin PDFs DISPONIBLES]\n\n`
+            : "";
         const customer = await ctx.runQuery(api.customers.getByTenantAndContact, {
           tenantId: args.tenantId,
           externalContactId: args.contactId,
@@ -292,10 +305,76 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           ? `[TU ÚLTIMO MENSAJE AL CLIENTE:]\n"${lastAssistantText.trim()}"\n[El cliente respondió a ese mensaje. Su intención ya está indicada en el texto anterior.]\n\n`
           : "";
 
+        // Pre-búsqueda RAG: inyecta contexto relevante directamente en el prompt.
+        // Esto garantiza que el agente tenga la información del negocio sin depender
+        // exclusivamente de que llame a searchTool con la query exacta correcta.
+        // El agente usa esta información como fuente de verdad primaria.
+        let preloadedRagContext = "";
+        const isLocationQuery = /(sede|local|horario|direcci[oó]n|ubicaci[oó]n|domicilio|barrio|ciudad)/i.test(clientText);
+        const isFoodQuery = /(men[uú]|precio|carta|plato|comida|comer|venden|tienen|ofrec|sirven|preparan|sopa|hamburguesa|carne|pollo|pescado|cerdo|ensalada|bebida|jugo|limonada|postre|entrada|acompa[ñn]|combo|bandeja|arroz|costilla|churrasco|solomito|infantil|vegeta)/i.test(clientText);
+        const isInfoQuery = isLocationQuery || isFoodQuery;
+        if (isInfoQuery) {
+          try {
+            const ragQueries: string[] = [clientText];
+
+            if (isLocationQuery) {
+              const cityMatch = clientText.match(/(medell[ií]n|bogot[aá]|barranquilla|rionegro|villavicencio|urab[aá]|bello|envigado|itagü?i|sabaneta)/i);
+              if (cityMatch) {
+                const normalized = cityMatch[1].toUpperCase().replace(/[ÍÌÎÏ]/g,"I").replace(/[ÁÀÂÄ]/g,"A").replace(/[ÉÈÊË]/g,"E").replace(/[ÚÙÛÜ]/g,"U");
+                ragQueries.push(`LOCALES ${normalized} horarios direcciones`);
+                ragQueries.push(`UBICACIONES ${normalized}`);
+              } else {
+                ragQueries.push("LOCALES horarios direcciones sedes");
+              }
+            }
+
+            if (isFoodQuery) {
+              ragQueries.push("carta platos bebidas menú");
+              ragQueries.push("combo hamburguesa carne pollo pescado");
+
+              // Sinónimos gastronómicos para que el RAG encuentre los platos reales
+              const cl = clientText.toLowerCase();
+              if (/sopas?/.test(cl)) ragQueries.push("sancocho trifásico ajiaco santafereño cazuela paisa cazuela montañera calentado");
+              if (/sancocho/.test(cl)) ragQueries.push("sancocho trifásico ajiaco cazuela");
+              if (/ajiaco/.test(cl)) ragQueries.push("ajiaco santafereño sancocho cazuela");
+              if (/parrill|asado/.test(cl)) ragQueries.push("churrasco baby beef punta de anca bife de chorizo solomito costillas");
+              if (/t[ií]pic/.test(cl)) ragQueries.push("bandeja paisa calentado paisa arroz paisa sancocho");
+              if (/entrada/.test(cl)) ragQueries.push("chorizo deditos mozarella chicharrón empanaditas yuquitas patacones");
+              if (/vegetarian/.test(cl)) ragQueries.push("ensalada de la casa atún al carbón arepa de queso");
+              if (/infantil|niño/.test(cl)) ragQueries.push("menú infantil nuggets pollo");
+            }
+
+            let ragResult = { entries: [] as { title?: string }[], text: "" };
+            for (const q of ragQueries) {
+              const result = await rag.search(ctx, {
+                namespace: args.tenantId,
+                query: q,
+                limit: 15,
+              });
+              if (result.entries.length > ragResult.entries.length) {
+                ragResult = result;
+              }
+              if (ragResult.entries.length >= 5) break;
+            }
+
+            if (ragResult.entries.length > 0) {
+              preloadedRagContext =
+                `[BASE DE CONOCIMIENTO DEL RESTAURANTE — FUENTE DE VERDAD OBLIGATORIA]\n` +
+                `INSTRUCCIÓN: Los datos a continuación son los únicos válidos para responder sobre sedes, locales, horarios, direcciones, menú, platos y precios de ESTE restaurante. NO uses ningún dato que no aparezca en este bloque. Responde basándote SOLO en esta información.\n\n` +
+                ragResult.text +
+                `\n[Fin BASE DE CONOCIMIENTO]\n\n`;
+            }
+          } catch (ragErr) {
+            console.warn("ycloud: pre-búsqueda RAG falló (no crítico)", ragErr instanceof Error ? ragErr.message : ragErr);
+          }
+        }
+
         const promptWithContext =
           modulesContext +
           customerContext +
           dateTimeContext +
+          pdfsContext +
+          preloadedRagContext +
           imageContext +
           (tenantPrompt?.prompt?.trim()
             ? `[Contexto del restaurante:]\n${tenantPrompt.prompt}\n\n`
@@ -305,12 +384,17 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
 
         const tools: Record<string, unknown> = {
           searchTool: search,
+          sendPdfTool: sendPdf,
           updateCustomerInfoTool: updateCustomerInfo,
           escalateConversationTool: escalateConversation,
           setPriorityTool: setPriority,
           resolveConversationTool: resolveConversation,
         };
-        if (hasReservas) tools.createReservationTool = createReservation;
+        if (hasReservas) {
+          tools.createReservationTool = createReservation;
+          tools.cancelReservationTool = cancelReservation;
+          tools.updateReservationTool = updateReservation;
+        }
         if (hasPedidos) {
           tools.createOrderTool = createOrder;
           tools.updateOrderTool = updateOrder;
@@ -344,9 +428,18 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             });
           }
         } catch (agentErr) {
-          console.error("YCloud: generateText falló", {
+          const errMessage =
+            agentErr instanceof Error
+              ? agentErr.message
+              : typeof agentErr === "object" && agentErr !== null
+                ? JSON.stringify(agentErr)
+                : String(agentErr);
+          console.error("YCloud: generateText falló (revisa OPENAI_API_KEY, créditos OpenAI y logs del agente en Convex)", {
             tenantId: args.tenantId,
-            error: agentErr instanceof Error ? agentErr.message : String(agentErr),
+            conversationId,
+            threadId,
+            error: errMessage,
+            stack: agentErr instanceof Error ? agentErr.stack : undefined,
           });
           if (args.channel === "whatsapp") {
             try {
@@ -363,9 +456,6 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         }
 
         if (args.channel === "whatsapp") {
-          // Usar el texto devuelto directamente por el agente
-          const directText = typeof agentResult?.text === "string" ? agentResult.text.trim() : "";
-
           /** Extrae texto plano del contenido de un mensaje del agente */
           function extractText(content: unknown): string {
             if (typeof content === "string") return content;
@@ -378,9 +468,35 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             return String(content ?? "");
           }
 
+          /** Convierte salidas JSON del modelo en texto plano para WhatsApp. */
+          function normalizeOutgoingText(text: string): string {
+            const trimmed = text.trim();
+            if (!trimmed) return "";
+            if (!(trimmed.startsWith("{") && trimmed.endsWith("}"))) return trimmed;
+            try {
+              const parsed = JSON.parse(trimmed) as {
+                response?: unknown;
+                message?: unknown;
+                text?: unknown;
+              };
+              const candidates = [parsed.response, parsed.message, parsed.text];
+              for (const value of candidates) {
+                if (typeof value === "string" && value.trim()) return value.trim();
+              }
+            } catch {
+              // Si no es JSON válido, se envía el texto original.
+            }
+            return trimmed;
+          }
+
+          // Usar el texto devuelto directamente por el agente
+          const directText = normalizeOutgoingText(
+            typeof agentResult?.text === "string" ? agentResult.text : ""
+          );
+
           /** Envía texto a WhatsApp; devuelve false si falla (sin lanzar). */
           async function trySend(text: string): Promise<boolean> {
-            const t = text.trim();
+            const t = normalizeOutgoingText(text).trim();
             if (!t) return false;
             try {
               await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
@@ -407,16 +523,39 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             "resolveConversationTool",
             "escalateConversationTool",
             "createPQRTool",
-            "createReservationTool",
             "cancelOrderTool",
             "updateOrderTool",
+            "sendPdfTool",
+            "cancelReservationTool",
+            "updateReservationTool",
+            // createReservationTool ya NO envía WhatsApp directamente;
+            // el LLM maneja la confirmación via directText.
           ]);
           const toolAlreadySentMessage = calledToolNames.some((name) =>
             SELF_SENDING_TOOLS.has(name)
           );
 
-          if (directText) {
+          // Si el createReservationTool falló (prefijo RESERVA_ERROR:), bloquear
+          // el directText del LLM para que no confirme una reserva que no existe.
+          const toolResults = (agentResult?.toolResults ?? []) as Array<{ result?: unknown }>;
+          const reservationFailed = toolResults.some((tr) =>
+            typeof tr.result === "string" && tr.result.startsWith("RESERVA_ERROR:")
+          );
+
+          if (directText && !reservationFailed) {
             await trySend(directText);
+          } else if (reservationFailed) {
+            // Si falló la reserva, enviar un mensaje explícito al cliente para evitar silencio.
+            const rawReservationError = toolResults
+              .map((tr) => (typeof tr.result === "string" ? tr.result : ""))
+              .find((r) => r.startsWith("RESERVA_ERROR:"));
+            const reservationError = rawReservationError
+              ? rawReservationError.replace(/^RESERVA_ERROR:\s*/, "").trim()
+              : "";
+            const fallbackErrorText =
+              "Lo siento, hubo un problema técnico al guardar la reserva. " +
+              "¿Puedes intentarlo nuevamente por favor?";
+            await trySend(reservationError || fallbackErrorText);
           } else if (toolAlreadySentMessage) {
             // El tool ya envió la confirmación al cliente — no enviar nada más
           } else {
@@ -443,9 +582,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
                 }
               );
               const continuationText =
-                typeof continuationResult?.text === "string"
-                  ? continuationResult.text.trim()
-                  : "";
+                typeof continuationResult?.text === "string" ? continuationResult.text : "";
               if (continuationText) {
                 sent = await trySend(continuationText);
               }

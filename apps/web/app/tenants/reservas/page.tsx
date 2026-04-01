@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Settings, Users, Smartphone, Store, Clock } from "lucide-react";
 
 const DEFAULT_PRIMARY = "#197fe6";
 const DEFAULT_SECONDARY = "#06b6d4";
@@ -47,6 +48,8 @@ type Reservation = {
   startTime: number;
   endTime: number;
   tableNumber?: string;
+  numberOfPeople?: number;
+  notes?: string;
   status: "confirmed" | "pending" | "cancelled" | "completed" | "no_show";
   source?: string;
   extraData?: string;
@@ -65,6 +68,7 @@ function ReservasContent() {
   const [selectedReservation, setSelectedReservation] = React.useState<Reservation | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newReservationOpen, setNewReservationOpen] = React.useState(false);
+  const [editReservationOpen, setEditReservationOpen] = React.useState(false);
   const [newReservationForm, setNewReservationForm] = React.useState({
     date: "",
     time: "19:00",
@@ -73,9 +77,33 @@ function ReservasContent() {
     customerPhone: "",
     customerEmail: "",
     tableNumber: "",
+    numberOfPeople: "" as string | number,
+    notes: "",
+  });
+  const [editReservationForm, setEditReservationForm] = React.useState({
+    reservationId: "" as Id<"reservations"> | "",
+    date: "",
+    time: "19:00",
+    durationMinutes: 120,
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    tableNumber: "",
+    numberOfPeople: "" as string | number,
+    notes: "",
   });
   const [creating, setCreating] = React.useState(false);
+  const [savingEdit, setSavingEdit] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
+  const [configOpen, setConfigOpen] = React.useState(false);
+  const [configForm, setConfigForm] = React.useState({
+    maxReservationsPerDay: 20,
+    maxVirtualPerDay: 10,
+    maxPresencialPerDay: 15,
+    defaultDurationMinutes: 120,
+  });
+  const [savingConfig, setSavingConfig] = React.useState(false);
+  const [configSaved, setConfigSaved] = React.useState(false);
 
   const dayStart = getDayStart(currentDate);
   const weekStart = getWeekStart(currentDate);
@@ -102,7 +130,9 @@ function ReservasContent() {
     tenantId ? { tenantId } : "skip"
   );
 
+  const saveConfig = useMutation(api.reservationConfig.save);
   const createReservation = useMutation(api.reservations.create);
+  const updateReservation = useMutation(api.reservations.update);
   const confirmArrival = useMutation(api.reservations.confirmArrival);
   const markNoShow = useMutation(api.reservations.markNoShow);
   const cancelReservation = useMutation(api.reservations.cancel);
@@ -119,6 +149,10 @@ function ReservasContent() {
   const counts = React.useMemo(() => {
     const rows = allReservations ?? [];
     const todayRows = rows.filter((r) => r.startTime >= todayStart && r.startTime <= todayEnd);
+    const scopedRows =
+      viewMode === "week"
+        ? rows
+        : rows.filter((r) => r.startTime >= dayStart && r.startTime <= dayStart + 24 * 60 * 60 * 1000 - 1);
     return {
       todas: rows.length,
       hoy: todayRows.length,
@@ -126,8 +160,11 @@ function ReservasContent() {
       pendientes: rows.filter((r) => r.status === "pending").length,
       no_show: rows.filter((r) => r.status === "no_show").length,
       canceladas: rows.filter((r) => r.status === "cancelled").length,
+      scopeTotal: scopedRows.filter((r) => r.status !== "cancelled").length,
+      scopeVirtual: scopedRows.filter((r) => r.status !== "cancelled" && r.source === "virtual").length,
+      scopePresencial: scopedRows.filter((r) => r.status !== "cancelled" && r.source === "presencial").length,
     };
-  }, [allReservations, todayStart, todayEnd]);
+  }, [allReservations, todayStart, todayEnd, viewMode, dayStart]);
 
   const filteredReservations = React.useMemo(() => {
     const rows = allReservations ?? [];
@@ -156,6 +193,33 @@ function ReservasContent() {
     }
   }, [googleStatus, showGoogleBanner]);
 
+  React.useEffect(() => {
+    if (config) {
+      setConfigForm({
+        maxReservationsPerDay: config.maxReservationsPerDay ?? 20,
+        maxVirtualPerDay: config.maxVirtualPerDay ?? 10,
+        maxPresencialPerDay: config.maxPresencialPerDay ?? 15,
+        defaultDurationMinutes: config.defaultDurationMinutes ?? 120,
+      });
+    }
+  }, [config]);
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenantId) return;
+    setSavingConfig(true);
+    try {
+      await saveConfig({ tenantId, ...configForm });
+      setConfigSaved(true);
+      setTimeout(() => {
+        setConfigSaved(false);
+        setConfigOpen(false);
+      }, 1200);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   const handleNewReservation = () => {
     const d = new Date(currentDate);
     setNewReservationForm({
@@ -166,6 +230,8 @@ function ReservasContent() {
       customerPhone: "",
       customerEmail: "",
       tableNumber: "",
+      numberOfPeople: "",
+      notes: "",
     });
     setNewReservationOpen(true);
   };
@@ -173,13 +239,14 @@ function ReservasContent() {
   const handleCreateReservation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
-    const { date, time, durationMinutes, customerName, customerPhone, customerEmail, tableNumber } =
+    const { date, time, durationMinutes, customerName, customerPhone, customerEmail, tableNumber, numberOfPeople, notes } =
       newReservationForm;
     if (!date || !time || !customerName.trim()) return;
     const [year, month, day] = date.split("-").map(Number);
     const [hours, minutes] = time.split(":").map(Number);
     const startDate = new Date(year, month - 1, day, hours, minutes || 0, 0);
     const endDate = new Date(startDate.getTime() + (durationMinutes || 120) * 60 * 1000);
+    const parsedPeople = numberOfPeople !== "" ? parseInt(String(numberOfPeople), 10) : undefined;
     setCreating(true);
     try {
       await createReservation({
@@ -190,6 +257,8 @@ function ReservasContent() {
         customerPhone: customerPhone.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
         tableNumber: tableNumber.trim() || undefined,
+        numberOfPeople: parsedPeople && !isNaN(parsedPeople) ? parsedPeople : undefined,
+        notes: notes.trim() || undefined,
         source: "presencial",
       });
       setNewReservationOpen(false);
@@ -214,6 +283,64 @@ function ReservasContent() {
       if (res.error) alert(res.error);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleOpenEditReservation = (reservationId: Id<"reservations">) => {
+    const row = (allReservations ?? []).find((r) => r._id === reservationId);
+    if (!row) return;
+    const start = new Date(row.startTime);
+    const end = new Date(row.endTime);
+    const durationMinutes = Math.max(30, Math.round((row.endTime - row.startTime) / (60 * 1000)));
+    setEditReservationForm({
+      reservationId: row._id,
+      date: start.toISOString().slice(0, 10),
+      time: `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+      durationMinutes,
+      customerName: row.customerName ?? "",
+      customerPhone: row.customerPhone ?? "",
+      customerEmail: row.customerEmail ?? "",
+      tableNumber: row.tableNumber ?? "",
+      numberOfPeople: row.numberOfPeople ?? "",
+      notes: row.notes ?? "",
+    });
+    setEditReservationOpen(true);
+  };
+
+  const handleSaveEditReservation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenantId || !editReservationForm.reservationId) return;
+    const { date, time, durationMinutes, customerName, customerPhone, customerEmail, tableNumber, numberOfPeople, notes } =
+      editReservationForm;
+    if (!date || !time || !customerName.trim()) return;
+
+    const [year, month, day] = date.split("-").map(Number);
+    const [hours, minutes] = time.split(":").map(Number);
+    const startDate = new Date(year, month - 1, day, hours, minutes || 0, 0);
+    const endDate = new Date(startDate.getTime() + (durationMinutes || 120) * 60 * 1000);
+    const parsedPeople = numberOfPeople !== "" ? parseInt(String(numberOfPeople), 10) : undefined;
+
+    setSavingEdit(true);
+    try {
+      await updateReservation({
+        reservationId: editReservationForm.reservationId,
+        startTime: startDate.getTime(),
+        endTime: endDate.getTime(),
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim() || undefined,
+        customerEmail: customerEmail.trim() || undefined,
+        tableNumber: tableNumber.trim() || undefined,
+        numberOfPeople: parsedPeople && !isNaN(parsedPeople) ? parsedPeople : undefined,
+        notes: notes.trim() || undefined,
+      });
+      setEditReservationOpen(false);
+      setDialogOpen(false);
+      setSelectedReservation(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar la reserva.";
+      alert(message);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -285,6 +412,46 @@ function ReservasContent() {
           onGoToday={() => setCurrentDate(new Date())}
         />
 
+        {/* Indicador de cupos + botón configurar */}
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2 text-slate-600">
+              <Users className="h-4 w-4 text-slate-400" />
+              <span>Total/día:</span>
+              <span className="font-semibold text-slate-800">
+                {counts.scopeTotal}
+                <span className="font-normal text-slate-400">
+                  {" "}/ {config?.maxReservationsPerDay ?? 20}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <Smartphone className="h-4 w-4 text-slate-400" />
+              <span>WhatsApp:</span>
+              <span className="font-semibold text-slate-800">
+                {counts.scopeVirtual}
+                <span className="font-normal text-slate-400">
+                  {" "}/ {config?.maxVirtualPerDay ?? 10}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <Store className="h-4 w-4 text-slate-400" />
+              <span>Presencial:</span>
+              <span className="font-semibold text-slate-800">
+                {counts.scopePresencial} / {config?.maxPresencialPerDay ?? 15}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setConfigOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Configurar cupos
+          </button>
+        </div>
+
         <ReservasTabs
           activeTab={filterTab}
           onTabChange={setFilterTab}
@@ -334,8 +501,271 @@ function ReservasContent() {
           onDelete={(id) =>
             runAction(() => deleteReservation({ reservationId: id }))
           }
+          onEdit={handleOpenEditReservation}
         />
       )}
+
+      {/* Modal editar reserva */}
+      <Dialog open={editReservationOpen} onOpenChange={setEditReservationOpen}>
+        <DialogContent className="max-w-md border-slate-200 bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900">Editar reserva</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveEditReservation} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Fecha</label>
+                <input
+                  type="date"
+                  required
+                  value={editReservationForm.date}
+                  onChange={(e) => setEditReservationForm((f) => ({ ...f, date: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Hora</label>
+                <input
+                  type="time"
+                  required
+                  value={editReservationForm.time}
+                  onChange={(e) => setEditReservationForm((f) => ({ ...f, time: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Duración (min)</label>
+              <input
+                type="number"
+                min={30}
+                max={480}
+                value={editReservationForm.durationMinutes}
+                onChange={(e) =>
+                  setEditReservationForm((f) => ({
+                    ...f,
+                    durationMinutes: parseInt(e.target.value, 10) || 120,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre *</label>
+              <input
+                type="text"
+                required
+                value={editReservationForm.customerName}
+                onChange={(e) => setEditReservationForm((f) => ({ ...f, customerName: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Personas</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={editReservationForm.numberOfPeople}
+                  onChange={(e) => setEditReservationForm((f) => ({ ...f, numberOfPeople: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Mesa / Zona</label>
+                <input
+                  type="text"
+                  value={editReservationForm.tableNumber}
+                  onChange={(e) => setEditReservationForm((f) => ({ ...f, tableNumber: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
+              <input
+                type="tel"
+                value={editReservationForm.customerPhone}
+                onChange={(e) => setEditReservationForm((f) => ({ ...f, customerPhone: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+              <input
+                type="email"
+                value={editReservationForm.customerEmail}
+                onChange={(e) => setEditReservationForm((f) => ({ ...f, customerEmail: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Observaciones</label>
+              <textarea
+                rows={2}
+                value={editReservationForm.notes}
+                onChange={(e) => setEditReservationForm((f) => ({ ...f, notes: e.target.value }))}
+                className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <DialogFooter className="gap-2 pt-4">
+              <button
+                type="button"
+                onClick={() => setEditReservationOpen(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+                style={{ backgroundColor: primaryColor }}
+              >
+                {savingEdit ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog configuración de cupos */}
+      <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+        <DialogContent className="max-w-md border-slate-200 bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900">
+              <Settings className="h-4 w-4" />
+              Configurar cupos de reservas
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveConfig} className="space-y-5 pt-1">
+            <p className="text-xs text-slate-500">
+              Define cuántas reservas se pueden aceptar por día. El bot de WhatsApp
+              respetará estos límites automáticamente.
+            </p>
+
+            {/* Total por día */}
+            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Límite total por día</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Máximo de reservas (WhatsApp + presenciales) que se aceptan en un día.
+              </p>
+              <input
+                type="number"
+                min={1}
+                max={999}
+                required
+                value={configForm.maxReservationsPerDay}
+                onChange={(e) =>
+                  setConfigForm((f) => ({
+                    ...f,
+                    maxReservationsPerDay: parseInt(e.target.value, 10) || 1,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+
+            {/* WhatsApp */}
+            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Smartphone className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Límite por WhatsApp / chat</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Reservas que el bot puede crear vía WhatsApp por día.
+              </p>
+              <input
+                type="number"
+                min={0}
+                max={999}
+                required
+                value={configForm.maxVirtualPerDay}
+                onChange={(e) =>
+                  setConfigForm((f) => ({
+                    ...f,
+                    maxVirtualPerDay: parseInt(e.target.value, 10) || 0,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+
+            {/* Presencial */}
+            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Store className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Límite presencial</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Reservas creadas manualmente desde el panel por día.
+              </p>
+              <input
+                type="number"
+                min={0}
+                max={999}
+                required
+                value={configForm.maxPresencialPerDay}
+                onChange={(e) =>
+                  setConfigForm((f) => ({
+                    ...f,
+                    maxPresencialPerDay: parseInt(e.target.value, 10) || 0,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+
+            {/* Duración por defecto */}
+            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Duración por defecto (minutos)</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Tiempo reservado por mesa si no se especifica otro.
+              </p>
+              <input
+                type="number"
+                min={15}
+                max={480}
+                step={15}
+                required
+                value={configForm.defaultDurationMinutes}
+                onChange={(e) =>
+                  setConfigForm((f) => ({
+                    ...f,
+                    defaultDurationMinutes: parseInt(e.target.value, 10) || 120,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfigOpen(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingConfig}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+                style={{ backgroundColor: primaryColor }}
+              >
+                {configSaved ? "¡Guardado! ✓" : savingConfig ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal nueva reserva */}
       <Dialog open={newReservationOpen} onOpenChange={setNewReservationOpen}>
@@ -403,14 +833,39 @@ function ReservasContent() {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
               />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Personas *</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={500}
+                  value={newReservationForm.numberOfPeople}
+                  onChange={(e) => setNewReservationForm((f) => ({ ...f, numberOfPeople: e.target.value }))}
+                  placeholder="Ej. 4"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Mesa / Zona</label>
+                <input
+                  type="text"
+                  value={newReservationForm.tableNumber}
+                  onChange={(e) => setNewReservationForm((f) => ({ ...f, tableNumber: e.target.value }))}
+                  placeholder="Ej. Party 1, Mesa 4"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                />
+              </div>
+            </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Mesa</label>
-              <input
-                type="text"
-                value={newReservationForm.tableNumber}
-                onChange={(e) => setNewReservationForm((f) => ({ ...f, tableNumber: e.target.value }))}
-                placeholder="Ej. 3"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+              <label className="mb-1 block text-sm font-medium text-slate-700">Observaciones</label>
+              <textarea
+                rows={2}
+                value={newReservationForm.notes}
+                onChange={(e) => setNewReservationForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Ej. Cumpleaños, decoración de aniversario, solicitud especial…"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5 resize-none"
               />
             </div>
             <DialogFooter className="gap-2 pt-4">
