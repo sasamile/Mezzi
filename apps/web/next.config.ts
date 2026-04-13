@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "instagram.fvvc1-1.fna.fbcdn.net",
       },
+      {
+
+        protocol: "https",
+        hostname: "media-cdn.tripadvisor.com",
+      }
     ],
   },
   webpack: (config) => {

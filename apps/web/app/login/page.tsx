@@ -222,7 +222,7 @@ function LoginContent() {
 
         <div className="relative h-full  hidden  w-full overflow-hidden bg-[#fff5f5] md:block">
           <Image
-            src="https://instagram.fvvc1-1.fna.fbcdn.net/v/t51.82787-15/610812676_18441598582101147_7140416435532073816_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=105&ig_cache_key=MzgwNDM5NDU2MzA4NDQxMzAwMw%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjEwODV4MTM1MS5zZHIuQzMifQ%3D%3D&_nc_ohc=0f9DMG1CTU0Q7kNvwHuZIJS&_nc_oc=AdlEkyM2Qenf_25H341vZ5LP-xlL1tioeaXU23G0VBgsSrBioZf69SzJxBW4JIj1EQI&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=instagram.fvvc1-1.fna&_nc_gid=rg-aMynQ8iP_40I2JmJPsQ&_nc_ss=8&oh=00_Afz0X0g2DclLhgbHMPQTlEZk_kFsc2hO-qjhmvrxR9HTDA&oe=69B92B34"
+            src="https://media-cdn.tripadvisor.com/media/photo-m/1280/14/40/1e/7e/vista-del-restaurante.jpg"
             alt="Panel de ejemplo"
             fill
             className="object-cover object-top rounded-3xl"
