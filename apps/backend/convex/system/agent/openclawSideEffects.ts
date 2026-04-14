@@ -230,12 +230,96 @@ export async function applyOpenClawSideEffect(
         return { ok: true };
       }
 
+      case "create_pqr": {
+        const a = effect.args ?? {};
+        const pqrType = String(a.type ?? "complaint").trim().toLowerCase();
+        const validTypes = ["petition", "complaint", "claim", "suggestion", "compliment"];
+        const resolvedType = validTypes.includes(pqrType) ? pqrType : "complaint";
+        const subject = String(a.subject ?? "").trim();
+        const description = String(a.description ?? "").trim();
+        if (!subject || subject.length < 5) {
+          return {
+            ok: false,
+            errorMessage:
+              "Falta un asunto claro para la PQR. Pregunta al cliente: '¿Cuál es el motivo de tu solicitud?'",
+          };
+        }
+        if (!description || description.length < 10) {
+          return {
+            ok: false,
+            errorMessage:
+              "Falta la descripción del caso. Pregunta al cliente: 'Por favor cuéntame qué pasó.'",
+          };
+        }
+        const pqrName = typeof a.customerName === "string" && a.customerName.trim()
+          ? a.customerName.trim()
+          : "Anónimo";
+        const pqrEmail = typeof a.customerEmail === "string" ? a.customerEmail.trim() || undefined : undefined;
+        const pqrPhone = typeof a.customerPhone === "string"
+          ? a.customerPhone.trim() || undefined
+          : phoneFromContact(contactId) || undefined;
+
+        try {
+          const pqrId: Id<"pqrs"> = await ctx.runMutation(api.pqrs.create, {
+            tenantId,
+            type: resolvedType as "petition" | "complaint" | "claim" | "suggestion" | "compliment",
+            customerName: pqrName,
+            customerEmail: pqrEmail,
+            customerPhone: pqrPhone,
+            subject,
+            description,
+            source: "whatsapp",
+          });
+          const pqrDoc = await ctx.runQuery(api.pqrs.get, { pqrId });
+          const ticket = pqrDoc?.ticketNumber ?? String(Date.now()).slice(-6);
+          const TYPE_LABELS: Record<string, string> = {
+            petition: "Petición",
+            complaint: "Queja",
+            claim: "Reclamo",
+            suggestion: "Sugerencia",
+            compliment: "Felicitación",
+          };
+          const label = TYPE_LABELS[resolvedType] ?? resolvedType;
+          console.log("openclawSideEffects: PQR creada", { pqrId, ticket, type: resolvedType });
+          return {
+            ok: true,
+            pqrTicket: ticket,
+            pqrTypeLabel: label,
+          } as { ok: true; errorMessage?: undefined; toolSentWhatsApp?: boolean; pqrTicket?: string; pqrTypeLabel?: string };
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          return {
+            ok: false,
+            errorMessage: `No se pudo registrar la PQR: ${message}`,
+          };
+        }
+      }
+
+      case "set_priority": {
+        const raw = String(effect.args?.priority ?? "high").trim().toLowerCase();
+        const PRIORITY_MAP: Record<string, "low" | "normal" | "high" | "urgent"> = {
+          low: "low",
+          normal: "normal",
+          medium: "normal",
+          high: "high",
+          urgent: "urgent",
+        };
+        const resolved = PRIORITY_MAP[raw] ?? "high";
+        try {
+          await ctx.runMutation(api.conversations.updatePriority, {
+            conversationId,
+            priority: resolved,
+          });
+        } catch {
+          // No crítico
+        }
+        return { ok: true };
+      }
+
       case "search_job_vacancies":
-        // La segunda llamada a OpenClaw (con vacancyLookupFromConvex) sustituye este efecto.
         return { ok: true };
 
       default:
-        // Otros kinds (create_order, etc.) se ignoran aquí; el mensaje del orquestador ya orienta al cliente.
         return { ok: true };
     }
   } catch (e) {

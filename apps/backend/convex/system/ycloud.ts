@@ -491,6 +491,14 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
                 ? `${outbound}\n\n⚠️ ${fx.errorMessage}`
                 : fx.errorMessage;
             }
+            const fxAny = fx as Record<string, unknown>;
+            if (fxAny.pqrTicket && typeof fxAny.pqrTicket === "string") {
+              const ticket = fxAny.pqrTicket as string;
+              const label = (fxAny.pqrTypeLabel as string) ?? "PQR";
+              if (!outbound.includes(ticket)) {
+                outbound += `\n\n📋 Ticket #${ticket} (${label}) registrado exitosamente. El equipo del restaurante revisará tu caso. 🙏`;
+              }
+            }
             let toSend = outbound.trim();
             if (!toSend) {
               console.warn(

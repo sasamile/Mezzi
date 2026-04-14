@@ -184,19 +184,33 @@ function buildTurnOutputContract(refinement: boolean): string {
 {
   "assistant_message": "mensaje en español para WhatsApp, tono amable y profesional del restaurante",
   "side_effect": null | {
-    "kind": "create_reservation" | "send_document_pdf" | "escalate_to_human" | "mark_resolved" | "search_job_vacancies",
+    "kind": "<ver lista abajo>",
     "args": { }
   }
 }
+Kinds válidos de side_effect:
+  "create_reservation"     — crear reserva (args: customerName?, date YYYY-MM-DD, time 24h, numberOfPeople|partySize, customerPhone?, tableNumber?, notes?)
+  "send_document_pdf"      — enviar PDF (args: label = label exacto de "pdfs")
+  "escalate_to_human"      — pasar a agente humano (args: {})
+  "mark_resolved"          — cerrar conversación (args: {})
+  "search_job_vacancies"   — buscar vacantes (args: city? o cityFilter?)
+  "create_pqr"             — registrar PQR: Petición, Queja, Reclamo, Sugerencia o Felicitación
+                             args OBLIGATORIOS: type (petition|complaint|claim|suggestion|compliment), subject (>5 chars), description (>10 chars)
+                             args opcionales: customerName, customerEmail, customerPhone, sede
+  "set_priority"           — cambiar prioridad de la conversación (args: priority = "high"|"medium"|"low")
+  "create_order"           — registrar pedido (args: items, notes?, customerName?, customerPhone?)
+  "cancel_order"           — cancelar último pedido pendiente (args: {})
+  "update_order"           — modificar último pedido (args: notes)
+  "cancel_reservation"     — cancelar reserva activa (args: {})
+  "update_reservation"     — modificar reserva activa (args: date?, time?, numberOfPeople?, tableNumber?, notes?)
+
 Reglas globales:
-- El campo "restaurantPrompt" del payload es el MANUAL OPERATIVO del restaurante (tono, flujos, menús de opciones, PQRS, trabaja con nosotros, etc.). Tiene PRIORIDAD sobre respuestas genéricas.
-- assistant_message: siempre presente. Mensajes cortos (pocas líneas), una pregunta por turno si el manual lo pide.
-- No inventes sedes, cargos ni precios: usa knowledgeBase (RAG) y, si aplica, vacancyLookupFromConvex.
-- side_effect.create_reservation: solo con datos completos. args: customerName?, date (YYYY-MM-DD), time (24h), numberOfPeople|partySize, customerPhone?, tableNumber?, notes?.
-- side_effect.send_document_pdf: args.label = label exacto de "pdfs".
-- side_effect.escalate_to_human | mark_resolved: args {}.
-- side_effect.search_job_vacancies: cuando el manual indique llamar búsqueda de vacantes (p. ej. ya tienes ciudad del cliente). args opcionales: city o cityFilter (nombre ciudad).
-${refinement ? "- Esta es una PASADA DE REFINADO: ya recibiste vacancyLookupFromConvex. Redacta assistant_message usando SOLO esa lista para cargos/sedes. side_effect debe ser null salvo PDF/reserva/escalar/cerrar.\n" : ""}`;
+- "restaurantPrompt" es el MANUAL OPERATIVO del restaurante. Tiene PRIORIDAD ABSOLUTA sobre respuestas genéricas. Sigue sus flujos, tonos y pasos al pie de la letra.
+- assistant_message: siempre presente. Mensajes cortos, una pregunta por turno si el manual lo pide.
+- No inventes sedes, cargos ni precios: usa knowledgeBase (RAG).
+- PQRS: cuando el manual diga "llama a createPQRTool" o el cliente haya dado tipo + asunto + descripción, emite side_effect create_pqr. NO sigas preguntando si ya tienes los 3 datos. El "type" se infiere del contexto (queja sobre comida/atención = complaint; sugerencia = suggestion; etc.). El "subject" es un resumen breve (~10 palabras). La "description" es lo que contó el cliente.
+- Reservas: solo con datos completos (nombre, fecha, hora, personas).
+${refinement ? "- PASADA DE REFINADO: ya recibiste vacancyLookupFromConvex. Redacta usando SOLO esa lista. side_effect null salvo PDF/reserva/escalar/cerrar.\n" : ""}`;
   return base;
 }
 
