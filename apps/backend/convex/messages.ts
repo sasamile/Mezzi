@@ -101,6 +101,37 @@ export const getRecentMessages = internalQuery({
   },
 });
 
+/**
+ * Devuelve todos los mensajes INBOUND recibidos desde el último mensaje OUTBOUND
+ * (es decir, los mensajes pendientes de respuesta del bot).
+ * Usado por el debounce para acumular mensajes antes de procesar con IA.
+ */
+export const getInboundSinceLastOutbound = internalQuery({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId)
+      )
+      .order("desc")
+      .take(50);
+
+    // En orden desc, el primer OUTBOUND "corta" los mensajes del usuario
+    const lastOutboundIdx = msgs.findIndex((m) => m.direction === "OUTBOUND");
+    const inbound =
+      lastOutboundIdx === -1
+        ? msgs.filter((m) => m.direction === "INBOUND")
+        : msgs.slice(0, lastOutboundIdx).filter((m) => m.direction === "INBOUND");
+
+    return inbound.reverse().map((m) => ({
+      content: m.content,
+      mediaUrl: m.mediaUrl,
+      mediaType: m.mediaType,
+    }));
+  },
+});
+
 /** Rellena lastMessagePreview en conversaciones existentes (ejecutar una vez). */
 function buildPreview(msg: { content: string; mediaType?: string }) {
   if (msg.mediaType === "image") return "Imagen";

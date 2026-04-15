@@ -108,6 +108,8 @@ export default defineSchema({
       v.literal("urgent")
     )),
     assignedTo: v.optional(v.id("users")), // null/undefined = Bot IA, set = humano/agente
+    /** ID del job programado para responder (debounce multi-mensaje) */
+    pendingJobId: v.optional(v.id("_scheduled_functions")),
     lastMessageAt: v.number(),
     lastMessagePreview: v.optional(v.string()), // preview para lista tipo WhatsApp
     lastMessageDirection: v.optional(v.union(v.literal("INBOUND"), v.literal("OUTBOUND"))),
