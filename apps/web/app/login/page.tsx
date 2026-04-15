@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "convex/react";
@@ -32,6 +32,33 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
+type LoginBranding = {
+  logoSrc: string;
+  logoAlt: string;
+  subtitle: string;
+  sideImageSrc: string;
+  sideImageAlt: string;
+};
+
+const DEFAULT_BRANDING: LoginBranding = {
+  logoSrc: "/logos/mezzi.svg",
+  logoAlt: "Logo Mezzi",
+  subtitle: "Bienvenido a Mezzi. Inicia sesión para administrar tu restaurante.",
+  sideImageSrc: "/login.png",
+  sideImageAlt: "Imagen de acceso Mezzi",
+};
+
+const HOST_BRANDING: Record<string, LoginBranding> = {
+  "gestia.com.co": {
+    logoSrc: "/logos/logoalcarbo.svg",
+    logoAlt: "Logo Al Carbón",
+    subtitle: "Ingresa tus credenciales para acceder al panel de restaurantes.",
+    sideImageSrc:
+      "https://media-cdn.tripadvisor.com/media/photo-m/1280/14/40/1e/7e/vista-del-restaurante.jpg",
+    sideImageAlt: "Vista del restaurante",
+  },
+};
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +82,14 @@ function LoginContent() {
     typeof window !== "undefined" ? { host: window.location.hostname } : "skip"
   );
   const [showPassword, setShowPassword] = useState(false);
+  const hostname =
+    typeof window !== "undefined"
+      ? window.location.hostname.toLowerCase().replace(/^www\./, "")
+      : "";
+  const branding = useMemo(
+    () => HOST_BRANDING[hostname] ?? DEFAULT_BRANDING,
+    [hostname]
+  );
 
   const form = useForm<LoginValues>({
     defaultValues: {
@@ -151,14 +186,14 @@ function LoginContent() {
             <div className="space-y-4">
               <div className="flex justify-center">
                 <Image
-                  src="/logos/logoalcarbo.svg"
-                  alt="Logo Mezzi"
+                  src={branding.logoSrc}
+                  alt={branding.logoAlt}
                   width={180}
                   height={80}
                 />
               </div>
               <p className="text-sm text-zinc-500 text-center">
-                Ingresa tus credenciales para acceder al panel de restaurantes.
+                {branding.subtitle}
               </p>
               {scopedTenant && (
                 <p className="text-xs text-zinc-500 text-center">
@@ -242,8 +277,8 @@ function LoginContent() {
 
         <div className="relative h-full  hidden  w-full overflow-hidden bg-[#fff5f5] md:block">
           <Image
-            src="https://media-cdn.tripadvisor.com/media/photo-m/1280/14/40/1e/7e/vista-del-restaurante.jpg"
-            alt="Panel de ejemplo"
+            src={branding.sideImageSrc}
+            alt={branding.sideImageAlt}
             fill
             className="object-cover object-top rounded-3xl"
           />
