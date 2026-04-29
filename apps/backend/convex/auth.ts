@@ -102,6 +102,48 @@ export const registerSuperadmin = mutation({
   },
 });
 
+/**
+ * Crea o actualiza un usuario superadmin con email y contrasena.
+ * Uso por CLI:
+ * `npx convex run auth:upsertSuperadmin '{"email":"admin@mezzi.com","password":"admin","name":"Mezzi Admin"}'`
+ */
+export const upsertSuperadmin = mutation({
+  args: {
+    email: v.string(),
+    password: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+
+    const salt = randomSalt();
+    const derived = await hashPassword(args.password, salt);
+    const passwordHash = `${uint8ToHex(salt)}:${derived}`;
+    const now = Date.now();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        email: args.email,
+        passwordHash,
+        isSuperadmin: true,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("users", {
+      name: args.name,
+      email: args.email,
+      passwordHash,
+      isSuperadmin: true,
+      createdAt: now,
+    });
+  },
+});
+
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {

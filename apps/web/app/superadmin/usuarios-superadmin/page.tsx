@@ -35,8 +35,8 @@ export default function UsuariosSuperadminPage() {
       setError("Completa todos los campos.");
       return;
     }
-    if (form.password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+    if (form.password.length < 5) {
+      setError("La contraseña debe tener al menos 5 caracteres.");
       return;
     }
     setError(null);
@@ -189,7 +189,7 @@ export default function UsuariosSuperadminPage() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 5 caracteres"
               />
             </div>
             {error && (

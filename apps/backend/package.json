@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "convex dev",
-    "deploy": "convex deploy"
+    "deploy": "convex deploy",
+    "seed:superadmin": "npx convex run auth:upsertSuperadmin '{\"email\":\"admin@mezzi.com\",\"password\":\"admin\",\"name\":\"Mezzi Admin\"}'"
   },
   "dependencies": {
     "@ai-sdk/openai": "1.3.23",
