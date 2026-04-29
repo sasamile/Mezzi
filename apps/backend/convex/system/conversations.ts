@@ -103,6 +103,42 @@ export const updateLastMessageAt = internalMutation({
   },
 });
 
+/**
+ * Reserva el envío de un OUTBOUND para evitar duplicados por carreras entre jobs.
+ * Si el mismo contenido ya fue reservado/enviado hace muy poco, se omite.
+ */
+export const reserveOutboundSend = internalMutation({
+  args: {
+    conversationId: v.id("conversations"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv) return { duplicate: false };
+
+    const normalized = args.content.trim();
+    const now = Date.now();
+    const DEDUPE_WINDOW_MS = 15_000;
+
+    if (
+      normalized &&
+      conv.lastOutboundContent?.trim() === normalized &&
+      typeof conv.lastOutboundSentAt === "number" &&
+      now - conv.lastOutboundSentAt < DEDUPE_WINDOW_MS
+    ) {
+      return { duplicate: true };
+    }
+
+    await ctx.db.patch(args.conversationId, {
+      lastOutboundContent: normalized,
+      lastOutboundSentAt: now,
+      updatedAt: now,
+    });
+
+    return { duplicate: false };
+  },
+});
+
 const channelValidator = v.union(
   v.literal("whatsapp"),
   v.literal("messenger"),

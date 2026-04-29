@@ -25,6 +25,17 @@ export const sendWhatsAppMessage = action({
     const contentTrimmed = formatForWhatsApp(args.content);
     if (!contentTrimmed) throw new Error("El mensaje no puede estar vacío");
 
+    const sendReservation = await ctx.runMutation(
+      internal.system.conversations.reserveOutboundSend,
+      {
+        conversationId: args.conversationId,
+        content: contentTrimmed,
+      }
+    );
+    if (sendReservation.duplicate) {
+      return { ok: true, skippedDuplicate: true };
+    }
+
     const integration = await ctx.runQuery(
       api.integrations.getYCloudForSend,
       { tenantId: args.tenantId }

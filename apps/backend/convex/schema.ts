@@ -113,6 +113,8 @@ export default defineSchema({
     lastMessageAt: v.number(),
     lastMessagePreview: v.optional(v.string()), // preview para lista tipo WhatsApp
     lastMessageDirection: v.optional(v.union(v.literal("INBOUND"), v.literal("OUTBOUND"))),
+    lastOutboundContent: v.optional(v.string()),
+    lastOutboundSentAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
