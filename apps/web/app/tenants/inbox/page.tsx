@@ -11,15 +11,15 @@ import {
   Paperclip,
   ImageIcon,
   Mic,
-  FileIcon,
-  Video,
-  CornerUpLeftIcon,
   Bot,
-  CircleIcon,
-  CheckIcon,
   CheckCircle2,
   Send,
   Wand2,
+  Info,
+  ArrowLeft,
+  Flag,
+  UserRound,
+  CornerUpLeft,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -36,20 +36,22 @@ import { CustomAudioPlayer } from "@/components/inbox/custom-audio-player";
 import { IntegrationBlockedBanner } from "@/components/integrations/integration-blocked-banner";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_PRIMARY = "#197fe6";
+const DEFAULT_PRIMARY = "#dc2626";
 const DEFAULT_SECONDARY = "#06b6d4";
+
 const PRIORITY_LABELS = {
   low: "Baja",
   normal: "Normal",
   high: "Alta",
   urgent: "Urgente",
 } as const;
-const PRIORITY_COLORS = {
-  low: "text-emerald-600",
-  normal: "text-amber-500",
-  high: "text-orange-500",
-  urgent: "text-red-600",
-} as const;
+
+const PRIORITY_DOT: Record<"low" | "normal" | "high" | "urgent", string> = {
+  low: "#10b981",
+  normal: "#f59e0b",
+  high: "#f97316",
+  urgent: "#dc2626",
+};
 
 type FilterMode = "all" | "bot" | "human" | "urgent";
 
@@ -142,18 +144,14 @@ export default function InboxPage() {
     () =>
       ({
         "--primaryColor": primaryColor,
-        "--primarySoft": `color-mix(in srgb, ${primaryColor} 12%, white)`,
-        "--primaryLight": `color-mix(in srgb, ${primaryColor} 20%, white)`,
+        "--primaryDark": `color-mix(in srgb, ${primaryColor} 78%, #1a1a2e)`,
+        "--primarySoft": `color-mix(in srgb, ${primaryColor} 14%, white)`,
+        "--primaryLight": `color-mix(in srgb, ${primaryColor} 8%, white)`,
+        "--primaryFaint": `color-mix(in srgb, ${primaryColor} 4%, white)`,
         "--secondaryColor": secondaryColor,
-        "--secondarySoft": `color-mix(in srgb, ${secondaryColor} 12%, white)`,
-        "--secondaryLight": `color-mix(in srgb, ${secondaryColor} 20%, white)`,
-        "--textPrimary": "#0F172A",
-        "--textSecondary": "#64748B",
-        "--backgroundSoft": "#F8FAFC",
       } as React.CSSProperties),
     [primaryColor, secondaryColor]
   );
-
 
   useEffect(() => {
     if (tenantConversations?.length && !selectedConversationId) {
@@ -204,7 +202,6 @@ export default function InboxPage() {
     (c) => c._id === selectedConversationId
   );
 
-  // Marcar conversación como vista (para indicador "mensaje nuevo")
   useEffect(() => {
     if (selectedConversationId && activeConversation && typeof window !== "undefined") {
       try {
@@ -218,14 +215,21 @@ export default function InboxPage() {
     }
   }, [selectedConversationId, activeConversation]);
 
-  const openCount =
-    tenantConversations?.filter((c) => c.status === "open").length ?? 0;
-
   const isBotMode = (c: { assignedTo?: Id<"users"> | null }) =>
     c.assignedTo == null || c.assignedTo === undefined;
 
   const hasPriority = (p: string | undefined | null): p is "low" | "normal" | "high" | "urgent" =>
     p === "low" || p === "normal" || p === "high" || p === "urgent";
+
+  const counts = useMemo(() => {
+    const list = tenantConversations ?? [];
+    return {
+      all: list.length,
+      bot: list.filter((c) => isBotMode(c)).length,
+      human: list.filter((c) => !isBotMode(c)).length,
+      urgent: list.filter((c) => c.priority === "urgent" || c.priority === "high").length,
+    };
+  }, [tenantConversations]);
 
   const filteredConversations = useMemo(() => {
     let list = tenantConversations ?? [];
@@ -250,24 +254,16 @@ export default function InboxPage() {
       default:
         break;
     }
-    // Ordenar: prioridad (urgent > high > normal > low), luego pendientes (necesitan atención), luego por último mensaje
     const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 } as const;
     return [...list].sort((a, b) => {
       const aP = hasPriority(a.priority) ? priorityOrder[a.priority] : 4;
       const bP = hasPriority(b.priority) ? priorityOrder[b.priority] : 4;
       if (aP !== bP) return aP - bP;
-      // Pendientes (status=pending, escalados a humano) arriba
       if (a.status === "pending" && b.status !== "pending") return -1;
       if (a.status !== "pending" && b.status === "pending") return 1;
       return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
     });
   }, [tenantConversations, filterMode, searchQuery]);
-
-  const triggerFileInput = (accept: string) => {
-    if (!fileInputRef.current) return;
-    fileInputRef.current.accept = accept;
-    fileInputRef.current.click();
-  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -281,7 +277,6 @@ export default function InboxPage() {
     if (documentInputRef.current) documentInputRef.current.value = "";
   };
 
-  /** Convierte WebP/GIF/etc a JPEG para compatibilidad con WhatsApp (solo PNG/JPEG). */
   const convertImageToJpeg = (file: File): Promise<File> => {
     const supported = ["image/jpeg", "image/png"];
     if (supported.includes(file.type)) return Promise.resolve(file);
@@ -329,7 +324,6 @@ export default function InboxPage() {
       return "document";
     };
     const newAttachments: { type: "image" | "audio" | "document"; file: File; preview?: string }[] = [];
-    // WhatsApp acepta OGG/MP3; MP4/M4A puede fallar (Convex lo sirve como octet-stream).
     const audioOkTypes = ["audio/ogg", "audio/mpeg", "audio/mp3"];
     for (const file of files) {
       let finalFile = file;
@@ -373,7 +367,6 @@ export default function InboxPage() {
   const handleStartRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // WhatsApp/YCloud: OGG primero (Chrome/Firefox); MP4 fallback para Safari.
       const mimeTypes: { mime: string; ext: string }[] = [
         { mime: "audio/ogg; codecs=opus", ext: "ogg" },
         { mime: "audio/mp4", ext: "m4a" },
@@ -485,7 +478,6 @@ export default function InboxPage() {
       conversationId: selectedConversationId,
       userId,
     });
-    // Si cambiamos a Bot, también reabrir la conversación si estaba pendiente (escalada)
     if (userId === null) {
       await updateStatus({ conversationId: selectedConversationId, status: "open" });
     }
@@ -625,6 +617,10 @@ export default function InboxPage() {
     }
   };
 
+  const conversationPhone = activeConversation
+    ? activeConversation.externalContactId.replace(/^whatsapp:/, "")
+    : null;
+
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -662,529 +658,544 @@ export default function InboxPage() {
     );
   }
 
+  const FILTERS: { id: FilterMode; label: string }[] = [
+    { id: "all", label: "Todas" },
+    { id: "bot", label: "Bot" },
+    { id: "human", label: "Humano" },
+    { id: "urgent", label: "Urgentes" },
+  ];
+
   return (
     <div
-      className="flex h-full min-h-0 w-full overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-lg"
-      style={{ ...cssVars, backgroundColor: "var(--backgroundSoft)" }}
+      className="flex h-full min-h-0 w-full overflow-hidden bg-white font-[var(--font-jakarta)]"
+      style={cssVars}
     >
-      {/* Sidebar estilo FincasYa - Tabs, búsqueda, Select, lista con border-b y accent */}
+      {/* Sidebar conv list */}
       <aside
-        className={`
-          shrink-0 flex flex-col border-r border-border bg-white min-w-[280px] md:min-w-[340px] transition-all duration-300
-          ${sidebarOpen ? "flex w-full md:w-[340px]" : "hidden md:flex md:w-[340px]"}
-        `}
+        className={`shrink-0 flex flex-col border-r border-slate-200 min-w-[280px] md:min-w-[340px] transition-all duration-300 bg-white
+          ${sidebarOpen ? "flex w-full md:w-[340px]" : "hidden md:flex md:w-[340px]"}`}
       >
-        <div className="flex h-full w-full min-w-0 flex-col">
-          <div className="shrink-0 p-4 border-b border-border">
-            {/* Tabs estilo FincasYa */}
-            <div className="mb-3 rounded-lg bg-muted p-[3px] grid grid-cols-4 h-9">
-              {(["all", "bot", "human", "urgent"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setFilterMode(mode)}
-                  className={`
-                    rounded-md text-xs font-medium transition-all flex items-center justify-center
-                    ${filterMode === mode
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"}
-                  `}
-                >
-                  {mode === "all" ? "Todas" : mode === "bot" ? "Bot" : mode === "human" ? "Humano" : "Urgentes"}
-                </button>
-              ))}
-            </div>
-
-            {(needingAttention ?? 0) > 0 && (
-              <div className="mb-3 rounded-lg bg-amber-100 border border-amber-200 px-3 py-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-600 text-lg">priority_high</span>
-                <span className="text-xs font-medium text-amber-800">
-                  {needingAttention} conversación(es) necesitan atención humana
-                </span>
-              </div>
-            )}
-
-            {/* Búsqueda estilo FincasYa */}
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar cliente..."
-                className="w-full h-9 rounded-md border border-input bg-transparent pl-8 pr-3 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-            {filteredConversations.map((conv) => {
-              const isActive = conv._id === selectedConversationId;
-              const bot = isBotMode(conv);
+        <header className="shrink-0 p-4 border-b border-slate-100">
+          {/* Tab pills */}
+          <div className="mb-3 rounded-xl bg-slate-100 p-[3px] grid grid-cols-4 h-9">
+            {FILTERS.map((f) => {
+              const active = filterMode === f.id;
+              const c = counts[f.id];
               return (
                 <button
-                  key={conv._id}
+                  key={f.id}
                   type="button"
-                  onClick={() => setSelectedConversationId(conv._id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      conversationId: conv._id,
-                    });
-                  }}
-                  className={`
-                    relative flex items-start gap-3 border-b border-border/50 p-3 w-full text-left
-                    hover:bg-accent/50 transition-colors group
-                    ${isActive ? "bg-accent" : ""}
-                  `}
+                  onClick={() => setFilterMode(f.id)}
+                  className={`rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1
+                    ${active
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"}`}
                 >
-                  {/* Barra vertical izquierda estilo FincasYa */}
-                  <div
-                    className={`
-                      absolute left-0 top-1/2 -translate-y-1/2 h-[64%] w-1 rounded-br-full rounded-tr-full
-                      transition-all duration-300 origin-center
-                      ${isActive ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0"}
-                    `}
-                    style={{ backgroundColor: "var(--primaryColor)" }}
-                  />
-                  <div
-                    className="size-9 rounded-lg flex items-center justify-center text-white shrink-0 font-semibold text-xs shadow-sm"
-                    style={{
-                      background: `linear-gradient(135deg, var(--primaryColor), color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e))`,
-                    }}
+                  {f.label}
+                  <span
+                    className={`text-[10px] font-bold tabular-nums ${
+                      active ? "text-slate-400" : "text-slate-400"
+                    }`}
                   >
-                    {conv.customerName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex flex-col flex-1 min-w-0 pr-1">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span
-                        className={`font-semibold text-[14px] truncate ${isActive ? "text-foreground" : "text-foreground/90"}`}
-                      >
-                        {conv.customerName}
-                      </span>
-                      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
-                        {new Date(conv.lastMessageAt).toLocaleTimeString("es", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs min-h-[18px]">
-                      <div className="flex w-0 grow items-center gap-1 min-w-0 min-h-[18px]">
-                        {conv.lastMessageDirection === "OUTBOUND" && (
-                          <CornerUpLeftIcon className="size-2.5 shrink-0 text-emerald-600" />
-                        )}
-                        {conv.lastMessagePreview && (
-                          <span className="line-clamp-1 border-r border-border/30 pr-2 truncate" title={conv.lastMessagePreview}>
-                            {conv.lastMessageDirection === "OUTBOUND" ? (
-                              <span className="text-emerald-600 font-medium">Tú: </span>
-                            ) : null}
-                            <span className="text-muted-foreground">{conv.lastMessagePreview}</span>
-                          </span>
-                        )}
-                      </div>
-                      {/* StatusIcon: pendiente=atención, closed=resuelta, bot=bot, humano=agente | Indicador mensaje nuevo */}
-                      <div className="flex items-center gap-1 shrink-0 min-h-[18px]">
-                        {conv.status === "pending" && (
-                          <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium text-amber-600" title="Necesita atención">
-                            <span className="material-symbols-outlined leading-none text-[10px]">priority_high</span>
-                            Atención
-                          </span>
-                        )}
-                        {hasPriority(conv.priority) && conv.status !== "pending" && (
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium",
-                              PRIORITY_COLORS[conv.priority],
-                            )}
-                            title={PRIORITY_LABELS[conv.priority]}
-                          >
-                            <span className={cn("material-symbols-outlined leading-none text-[10px]", PRIORITY_COLORS[conv.priority])}>
-                              flag
-                            </span>
-                            {PRIORITY_LABELS[conv.priority]}
-                          </span>
-                        )}
-                        <div
-                          className={cn(
-                            "flex items-center justify-center rounded-full size-[18px] shrink-0",
-                            conv.status === "closed" ? "bg-[#3FB62F]" : conv.status === "pending" ? "bg-amber-500" : bot ? "bg-orange-500/80" : "bg-destructive/80",
-                          )}
-                        >
-                          {conv.status === "closed" ? (
-                            <CheckIcon className="size-2.5 stroke-3 text-white" />
-                          ) : conv.status === "pending" ? (
-                            <CircleIcon className="size-2.5 stroke-3 text-white" />
-                          ) : bot ? (
-                            <Bot className="size-2.5 stroke-3 text-white" />
-                          ) : (
-                            <CircleIcon className="size-2.5 stroke-3 text-white" />
-                          )}
-                        </div>
-                        {/* Indicador de mensaje nuevo (último mensaje del cliente, no visto) */}
-                        {mounted &&
-                          conv.lastMessageDirection === "INBOUND" &&
-                          conv._id !== selectedConversationId &&
-                          (() => {
-                            try {
-                              const stored = localStorage.getItem(`inbox-seen-${conv._id}`);
-                              const lastSeen = stored ? Number(stored) : 0;
-                              return conv.lastMessageAt > lastSeen;
-                            } catch {
-                              return false;
-                            }
-                          })() && (
-                            <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: "var(--primaryColor)" }} title="Nuevo mensaje" />
-                          )}
-                      </div>
-                    </div>
-                  </div>
+                    {c}
+                  </span>
                 </button>
               );
             })}
-            {(!tenantConversations || tenantConversations.length === 0) && (
-              <div className="py-12 text-center">
-                <span className="material-symbols-outlined text-4xl text-muted-foreground/50">
-                  inbox
-                </span>
-                <p className="mt-2 text-sm font-medium text-muted-foreground">
-                  No se encontraron conversaciones
-                </p>
-              </div>
-            )}
           </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              size={15}
+              strokeWidth={1.8}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar cliente o número..."
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-(--primarySoft) focus:border-(--primaryColor) transition-shadow"
+            />
+          </div>
+        </header>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {filteredConversations.map((conv) => {
+            const isActive = conv._id === selectedConversationId;
+            const bot = isBotMode(conv);
+            const isNew =
+              mounted &&
+              conv.lastMessageDirection === "INBOUND" &&
+              conv._id !== selectedConversationId &&
+              (() => {
+                try {
+                  const stored = localStorage.getItem(`inbox-seen-${conv._id}`);
+                  const lastSeen = stored ? Number(stored) : 0;
+                  return conv.lastMessageAt > lastSeen;
+                } catch {
+                  return false;
+                }
+              })();
+            return (
+              <button
+                key={conv._id}
+                type="button"
+                onClick={() => setSelectedConversationId(conv._id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    conversationId: conv._id,
+                  });
+                }}
+                className={cn(
+                  "w-full text-left flex items-start gap-3 px-3 py-3 border-b border-slate-100 transition-colors hover:bg-slate-50/70",
+                  isActive && "bg-(--primaryFaint)"
+                )}
+              >
+                <div
+                  className="shrink-0 size-10 rounded-xl grid place-items-center text-white text-sm font-bold shadow-sm"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--primaryColor), var(--primaryDark))",
+                  }}
+                >
+                  {conv.customerName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                    <span
+                      className={cn(
+                        "truncate text-[14px]",
+                        isNew ? "font-bold text-slate-900" : "font-semibold text-slate-800"
+                      )}
+                    >
+                      {conv.customerName}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10.5px] tabular-nums shrink-0",
+                        isNew ? "text-(--primaryColor) font-bold" : "text-slate-400"
+                      )}
+                    >
+                      {new Date(conv.lastMessageAt).toLocaleTimeString("es", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <div className="flex grow items-center gap-1 min-w-0">
+                      {conv.lastMessageDirection === "OUTBOUND" && (
+                        <CornerUpLeft
+                          className="shrink-0 text-emerald-600"
+                          size={11}
+                          strokeWidth={2}
+                        />
+                      )}
+                      <span className="truncate text-slate-500">
+                        {conv.lastMessageDirection === "OUTBOUND" && (
+                          <span className="text-emerald-600 font-medium">Tú: </span>
+                        )}
+                        {conv.lastMessagePreview || "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {conv.status === "pending" && (
+                        <span
+                          className="inline-flex items-center justify-center size-4 rounded-full bg-amber-100"
+                          title="Necesita atención"
+                        >
+                          <span
+                            className="size-1.5 rounded-full bg-amber-500"
+                          />
+                        </span>
+                      )}
+                      {hasPriority(conv.priority) && conv.status !== "pending" && (
+                        <span
+                          className="inline-flex items-center justify-center size-4 rounded-full"
+                          style={{
+                            background: `${PRIORITY_DOT[conv.priority]}25`,
+                          }}
+                          title={PRIORITY_LABELS[conv.priority]}
+                        >
+                          <span
+                            className="size-1.5 rounded-full"
+                            style={{ background: PRIORITY_DOT[conv.priority] }}
+                          />
+                        </span>
+                      )}
+                      <span
+                        className={cn(
+                          "inline-flex items-center justify-center size-5 rounded-full",
+                          bot
+                            ? "bg-emerald-100 text-emerald-600"
+                            : "bg-(--primarySoft) text-(--primaryColor)"
+                        )}
+                        title={bot ? "Bot" : "Agente"}
+                      >
+                        {bot ? (
+                          <Bot size={11} strokeWidth={2} />
+                        ) : (
+                          <UserRound size={11} strokeWidth={2} />
+                        )}
+                      </span>
+                      {isNew && (
+                        <span
+                          className="size-2 rounded-full bg-(--primaryColor) ml-0.5"
+                          title="Nuevo"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+          {(!tenantConversations || tenantConversations.length === 0) && (
+            <div className="py-12 text-center">
+              <p className="text-sm text-slate-500">No hay conversaciones</p>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* Panel principal - Chat estilo FincasYa */}
+      {/* Chat */}
       <main
-        className={`flex flex-1 flex-col min-w-0 bg-muted ${sidebarOpen ? "hidden md:flex" : "flex"}`}
+        className={cn(
+          "flex-1 flex flex-col min-w-0 bg-slate-50/40",
+          sidebarOpen ? "hidden md:flex" : "flex"
+        )}
       >
         {activeConversation ? (
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-              {/* Header estilo FincasYa */}
-              <header className="sticky top-0 z-10 shrink-0 border-b border-border bg-background px-4 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => setSidebarOpen(true)}
-                      className="md:hidden size-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
-                    >
-                      <span className="material-symbols-outlined">arrow_back</span>
-                    </button>
-                    <div
-                      className="size-10 rounded-lg flex items-center justify-center text-white shrink-0 font-semibold text-sm shadow-sm"
-                      style={{
-                        background: `linear-gradient(135deg, var(--primaryColor), color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e))`,
-                      }}
-                    >
-                      {activeConversation.customerName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-semibold truncate text-[#0F172A]">
-                        {activeConversation.customerName}
-                      </h2>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={`text-[11px] font-medium ${
-                            activeConversation.status === "pending"
-                              ? "text-amber-600"
-                              : isBotMode(activeConversation) && activeConversation.status === "open"
-                                ? "text-emerald-600"
-                                : "text-slate-500"
-                          }`}
-                        >
-                          {activeConversation.status === "pending"
-                            ? "Necesita atención humana"
-                            : isBotMode(activeConversation)
-                              ? "Bot IA"
-                              : "Agente"}
-                          {" · "}
-                          {activeConversation.status === "open"
-                            ? "Activo"
-                            : activeConversation.status === "closed"
-                              ? "Cerrado"
-                              : "Pendiente"}
-                        </span>
-                        {hasPriority(activeConversation.priority) && (
-                          <span className="text-[10px] text-slate-400">
-                            · {PRIORITY_LABELS[activeConversation.priority]}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {/* Activar / Desactivar Bot - cuando pending (escalado) mostrar "Necesita atención" */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className={`
-                          shrink-0 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all
-                          ${activeConversation.status === "pending"
-                            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                            : isBotMode(activeConversation)
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"}
-                        `}
-                        title={
-                          activeConversation.status === "pending"
-                            ? "Escalado a humano - necesita atención"
-                            : isBotMode(activeConversation)
-                              ? "Bot activo - click para desactivar"
-                              : "Bot desactivado - click para activar"
-                        }
-                      >
-                        <span className="material-symbols-outlined text-base">
-                          {activeConversation.status === "pending"
-                            ? "priority_high"
-                            : isBotMode(activeConversation)
-                              ? "smart_toy"
-                              : "support_agent"}
-                        </span>
-                        {activeConversation.status === "pending"
-                          ? "Necesita atención"
+              {/* Header compacto */}
+              <header className="shrink-0 px-4 py-2.5 border-b border-slate-200 bg-white flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden size-8 rounded-lg flex items-center justify-center text-slate-500"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <div
+                  className="shrink-0 size-10 rounded-xl grid place-items-center text-white text-sm font-bold shadow-sm"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--primaryColor), var(--primaryDark))",
+                  }}
+                >
+                  {activeConversation.customerName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-sm font-bold text-slate-900 truncate">
+                    {activeConversation.customerName}
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 truncate">
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        activeConversation.status === "pending"
+                          ? "text-amber-600"
                           : isBotMode(activeConversation)
-                            ? "Bot activo"
-                            : "Desactivado"}
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuLabel>Modo de atención</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleSetMode(null)}>
-                        <span className="material-symbols-outlined text-lg mr-2">smart_toy</span>
-                        Cambiar a Bot (responde automáticamente)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleSetMode(getHumanUserId())}
-                        disabled={!getHumanUserId()}
-                      >
-                        <span className="material-symbols-outlined text-lg mr-2">support_agent</span>
-                        Cambiar a humano
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {activeConversation.status !== "closed" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSetStatus("closed")}
-                        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
-                        title="Marcar conversación como resuelta"
-                      >
-                        <CheckCircle2 className="size-4" />
-                        Marcar como resuelta
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleSetStatus("open")}
-                        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                        title="Reabrir conversación"
-                      >
-                        Marcar como abierta
-                      </button>
-                    )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="size-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
-                          title="Prioridad"
-                        >
-                          <span className={`material-symbols-outlined text-lg ${hasPriority(activeConversation.priority) ? PRIORITY_COLORS[activeConversation.priority] : "text-slate-400"}`}>
-                            flag
-                          </span>
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Prioridad</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {hasPriority(activeConversation.priority) && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleSetPriority(null)}>
-                              <span className="material-symbols-outlined text-base mr-2 text-muted-foreground">
-                                close
-                              </span>
-                              Quitar prioridad
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        {(["low", "normal", "high", "urgent"] as const).map((p) => (
-                          <DropdownMenuItem key={p} onClick={() => handleSetPriority(p)}>
-                            <span className={`material-symbols-outlined text-base mr-2 ${PRIORITY_COLORS[p]}`}>
-                              flag
-                            </span>
-                            {PRIORITY_LABELS[p]}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowContactInfo((x) => !x)}
-                      className={`size-9 rounded-lg flex items-center justify-center transition-colors ${
-                        showContactInfo ? "bg-(--primarySoft) text-(--primaryColor)" : "text-slate-500 hover:bg-slate-100"
-                      }`}
-                      title="Info de contacto"
+                            ? "text-emerald-600"
+                            : "text-(--primaryColor)"
+                      )}
                     >
-                      <span className="material-symbols-outlined text-lg">info</span>
-                    </button>
+                      {activeConversation.status === "pending"
+                        ? "Necesita atención"
+                        : isBotMode(activeConversation)
+                          ? "Bot IA"
+                          : "Agente"}
+                    </span>
+                    <span>·</span>
+                    <span>
+                      {activeConversation.status === "open"
+                        ? "Activo"
+                        : activeConversation.status === "closed"
+                          ? "Cerrado"
+                          : "Pendiente"}
+                    </span>
+                    {conversationPhone && (
+                      <>
+                        <span>·</span>
+                        <span className="truncate">{conversationPhone}</span>
+                      </>
+                    )}
                   </div>
                 </div>
+
+                {/* Bot/Agente toggle pill */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    isBotMode(activeConversation)
+                      ? handleSetMode(getHumanUserId())
+                      : handleSetMode(null)
+                  }
+                  disabled={isBotMode(activeConversation) && !getHumanUserId()}
+                  title={
+                    activeConversation.status === "pending"
+                      ? "Necesita atención humana"
+                      : isBotMode(activeConversation)
+                        ? "Bot activo - click para tomar control"
+                        : "Click para activar el bot"
+                  }
+                  className={cn(
+                    "shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-all disabled:opacity-50",
+                    activeConversation.status === "pending"
+                      ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                      : isBotMode(activeConversation)
+                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                        : "bg-(--primarySoft) text-(--primaryColor) hover:bg-(--primaryLight)"
+                  )}
+                >
+                  {isBotMode(activeConversation) ? (
+                    <Bot size={13} strokeWidth={2} />
+                  ) : (
+                    <UserRound size={13} strokeWidth={2} />
+                  )}
+                  {activeConversation.status === "pending"
+                    ? "Atender"
+                    : isBotMode(activeConversation)
+                      ? "Bot activo"
+                      : "Agente"}
+                </button>
+
+                {/* Resolver */}
+                {activeConversation.status !== "closed" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSetStatus("closed")}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                    title="Marcar como resuelta"
+                  >
+                    <CheckCircle2 size={13} strokeWidth={2} />
+                    Resolver
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSetStatus("open")}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                  >
+                    Reabrir
+                  </button>
+                )}
+
+                {/* Prioridad */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      title="Prioridad"
+                      className="shrink-0 size-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                      style={
+                        hasPriority(activeConversation.priority)
+                          ? { color: PRIORITY_DOT[activeConversation.priority] }
+                          : undefined
+                      }
+                    >
+                      <Flag size={16} strokeWidth={1.7} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Prioridad</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {hasPriority(activeConversation.priority) && (
+                      <>
+                        <DropdownMenuItem onClick={() => handleSetPriority(null)}>
+                          Quitar prioridad
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    {(["low", "normal", "high", "urgent"] as const).map((p) => (
+                      <DropdownMenuItem key={p} onClick={() => handleSetPriority(p)}>
+                        <span
+                          className="size-2 rounded-full mr-2"
+                          style={{ background: PRIORITY_DOT[p] }}
+                        />
+                        {PRIORITY_LABELS[p]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Info */}
+                <button
+                  type="button"
+                  onClick={() => setShowContactInfo((x) => !x)}
+                  className={cn(
+                    "shrink-0 size-8 grid place-items-center rounded-lg transition-colors",
+                    showContactInfo
+                      ? "bg-(--primarySoft) text-(--primaryColor)"
+                      : "text-slate-500 hover:bg-slate-100"
+                  )}
+                  title="Info de contacto"
+                >
+                  <Info size={16} strokeWidth={1.7} />
+                </button>
               </header>
 
-              {/* Mensajes - única zona con scroll */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-muted/30">
+              {/* Mensajes */}
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
                 {messageGroups.map(({ date, messages }) => (
                   <div key={date} className="mb-5">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex-1 h-px bg-slate-200" />
-                      <span
-                        className="text-[11px] font-medium"
-                        style={{ color: "var(--textSecondary)" }}
-                      >
+                      <span className="text-[11px] font-medium text-slate-400">
                         — {date} —
                       </span>
                       <div className="flex-1 h-px bg-slate-200" />
                     </div>
-                    <div className="space-y-4">
-                      {messages.map((msg) => (
-                        <div
-                          key={msg._id}
-                          className={`flex ${
-                            msg.direction === "OUTBOUND" ? "justify-end" : "justify-start"
-                          }`}
-                        >
+                    <div className="space-y-3">
+                      {messages.map((msg) => {
+                        const isOutbound = msg.direction === "OUTBOUND";
+                        return (
                           <div
+                            key={msg._id}
                             className={cn(
-                              "relative max-w-[85%] rounded-lg px-4 py-3 transition-all",
-                              msg.direction === "OUTBOUND" ? "" : "bg-white shadow-sm border border-slate-100",
+                              "flex",
+                              isOutbound ? "justify-end" : "justify-start"
                             )}
-                            style={msg.direction === "OUTBOUND" ? { backgroundColor: "var(--primaryLight)" } : undefined}
                           >
-                            {msg.direction === "OUTBOUND" && msg.isBot && (
-                              <span
-                                className="absolute -top-1.5 left-2 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{
-                                  backgroundColor: "var(--primaryLight)",
-                                  color: "var(--primaryColor)",
-                                }}
-                              >
-                                Bot IA
-                              </span>
-                            )}
-                            {msg.mediaUrl && (
-                              <div className="mb-2 rounded-lg overflow-hidden">
-                                {msg.mediaType === "video" ? (
-                                  <video
-                                    src={msg.mediaUrl}
-                                    controls
-                                    className="max-h-64 w-full object-contain rounded"
-                                  />
-                                ) : msg.mediaType === "document" ? (
-                                  <div className="rounded-lg overflow-hidden border border-slate-200/80 bg-white shadow-sm">
-                                    {/* Vista previa primera página PDF - estilo WhatsApp */}
-                                    <div className="relative h-48 sm:h-56 bg-slate-50 overflow-hidden">
-                                      <iframe
-                                        src={`${msg.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
-                                        className="absolute inset-0 w-full h-full border-0 bg-white"
-                                        title="Vista previa PDF"
+                            <div
+                              className={cn(
+                                "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
+                                isOutbound
+                                  ? "bg-(--primarySoft) text-slate-800"
+                                  : "bg-white text-slate-800 border border-slate-200/70"
+                              )}
+                              style={
+                                isOutbound
+                                  ? {
+                                      borderTopRightRadius: 6,
+                                    }
+                                  : {
+                                      borderTopLeftRadius: 6,
+                                    }
+                              }
+                            >
+                              {msg.mediaUrl && (
+                                <div className="mb-2 rounded-lg overflow-hidden">
+                                  {msg.mediaType === "video" ? (
+                                    <video
+                                      src={msg.mediaUrl}
+                                      controls
+                                      className="max-h-64 w-full object-contain rounded"
+                                    />
+                                  ) : msg.mediaType === "document" ? (
+                                    <div className="rounded-lg overflow-hidden border border-slate-200 bg-white">
+                                      <div className="relative h-48 sm:h-56 bg-slate-50 overflow-hidden">
+                                        <iframe
+                                          src={`${msg.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
+                                          className="absolute inset-0 w-full h-full border-0 bg-white"
+                                          title="Vista previa PDF"
+                                        />
+                                      </div>
+                                      <a
+                                        href={msg.mediaUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors border-t border-slate-100"
+                                      >
+                                        <div
+                                          className="shrink-0 size-11 rounded-lg grid place-items-center text-white font-bold text-xs"
+                                          style={{ backgroundColor: "#E53935" }}
+                                        >
+                                          PDF
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-semibold text-slate-900 truncate">
+                                            {msg.content && msg.content !== "Documento"
+                                              ? msg.content
+                                              : "Documento"}
+                                          </p>
+                                          <p className="text-[11px] text-slate-500">
+                                            Toca para abrir
+                                          </p>
+                                        </div>
+                                      </a>
+                                    </div>
+                                  ) : msg.mediaType === "audio" ? (
+                                    <div className="-ml-1">
+                                      <CustomAudioPlayer
+                                        src={msg.mediaUrl}
+                                        isContact={msg.direction === "INBOUND"}
+                                        avatarSeed={
+                                          msg.direction === "INBOUND"
+                                            ? activeConversation.customerName
+                                            : "Agente"
+                                        }
+                                        timestamp={new Date(msg.createdAt).toLocaleTimeString(
+                                          "es",
+                                          { hour: "2-digit", minute: "2-digit" }
+                                        )}
                                       />
                                     </div>
-                                    {/* Card inferior estilo WhatsApp: icono PDF + nombre + abrir */}
-                                    <a
-                                      href={msg.mediaUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors border-t border-slate-100"
+                                  ) : (
+                                    <div
+                                      className="cursor-pointer overflow-hidden rounded-md max-w-sm"
+                                      onClick={() => {
+                                        const idx = chatImages.findIndex(
+                                          (img) => img.url === msg.mediaUrl
+                                        );
+                                        setViewerInitialIndex(idx !== -1 ? idx : 0);
+                                      }}
                                     >
-                                      <div className="shrink-0 size-12 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: "#E53935" }}>
-                                        PDF
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold truncate" style={{ color: "var(--textPrimary)" }}>
-                                          {msg.content && msg.content !== "Documento" ? msg.content : "Documento"}
-                                        </p>
-                                        <p className="text-[11px] text-slate-500">Toca para abrir</p>
-                                      </div>
-                                      <span className="material-symbols-outlined text-slate-400 shrink-0">open_in_new</span>
-                                    </a>
-                                  </div>
-                                ) : msg.mediaType === "audio" ? (
-                                  <div className="mb-1 -ml-1">
-                                    <CustomAudioPlayer
-                                      src={msg.mediaUrl}
-                                      isContact={msg.direction === "INBOUND"}
-                                      avatarSeed={msg.direction === "INBOUND" ? activeConversation?.customerName ?? "user" : "Agente"}
-                                      timestamp={new Date(msg.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="mb-2 max-w-sm rounded-md overflow-hidden border border-black/5 bg-black/5 cursor-pointer relative group"
-                                    onClick={() => {
-                                      const idx = chatImages.findIndex((img) => img.url === msg.mediaUrl);
-                                      setViewerInitialIndex(idx !== -1 ? idx : 0);
-                                    }}
-                                  >
-                                    <img
-                                      src={msg.mediaUrl}
-                                      alt="Imagen adjunta"
-                                      className="object-contain max-h-64 w-full transition-all group-hover:scale-105"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                      <span className="text-white text-xs font-medium px-3 py-1.5 bg-black/50 rounded-full backdrop-blur-sm">
-                                        Ver foto
-                                      </span>
+                                      <img
+                                        src={msg.mediaUrl}
+                                        alt="Imagen adjunta"
+                                        className="object-contain max-h-64 w-full"
+                                      />
                                     </div>
-                                  </div>
+                                  )}
+                                </div>
+                              )}
+                              {(!msg.mediaUrl ||
+                                (msg.content &&
+                                  !["Imagen", "Video", "Audio", "Sticker", "Documento"].includes(
+                                    msg.content
+                                  ) &&
+                                  msg.mediaType !== "document")) && (
+                                <p className="whitespace-pre-wrap break-words leading-relaxed">
+                                  {msg.content}
+                                </p>
+                              )}
+                              <p className="mt-1 text-[10px] text-slate-400 tabular-nums">
+                                {isOutbound && msg.isBot && (
+                                  <span className="text-emerald-600 font-semibold mr-1">
+                                    Bot ·
+                                  </span>
                                 )}
-                              </div>
-                            )}
-                            {(!msg.mediaUrl || (msg.content && !["Imagen", "Video", "Audio", "Sticker", "Documento"].includes(msg.content) && msg.mediaType !== "document")) && (
-                            <p
-                              className="text-sm whitespace-pre-wrap wrap-break-word"
-                              style={{ color: "var(--textPrimary)" }}
-                            >
-                              {msg.content}
-                            </p>
-                            )}
-                            <p
-                              className="mt-1 text-[10px]"
-                              style={{ color: "var(--textSecondary)" }}
-                            >
-                              {new Date(msg.createdAt).toLocaleTimeString("es", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
+                                {new Date(msg.createdAt).toLocaleTimeString("es", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
                 {activeMessages?.length === 0 && (
                   <div className="flex h-40 items-center justify-center">
-                    <p className="text-sm" style={{ color: "var(--textSecondary)" }}>
-                      No hay mensajes aún
-                    </p>
+                    <p className="text-sm text-slate-500">No hay mensajes aún</p>
                   </div>
                 )}
               </div>
 
-              {/* Input - estilo FincasYa con lucide */}
-              <div className="shrink-0 border-t border-border bg-background p-3">
+              {/* Composer */}
+              <div className="shrink-0 border-t border-slate-200 bg-white p-3">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1193,138 +1204,165 @@ export default function InboxPage() {
                   className="hidden"
                   onChange={handleFileSelect}
                 />
-                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
-                <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.txt" multiple className="hidden" onChange={handleDocumentChange} />
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+                <input
+                  ref={documentInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleDocumentChange}
+                />
+
                 {pendingAttachments.length > 0 && (
                   <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
                     {pendingAttachments.map((att, i) => (
-                      <div key={i} className="relative shrink-0 group">
+                      <div key={i} className="relative shrink-0">
                         {att.type === "image" && att.preview ? (
-                          <img src={att.preview} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                          <img
+                            src={att.preview}
+                            alt=""
+                            className="w-14 h-14 rounded-lg object-cover border border-slate-200"
+                          />
                         ) : (
-                          <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center">
-                            <span className="material-symbols-outlined text-slate-400 text-xl">
-                              {att.type === "document" ? "description" : "audiotrack"}
-                            </span>
+                          <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 grid place-items-center text-slate-400">
+                            {att.type === "document" ? (
+                              <Paperclip size={18} />
+                            ) : (
+                              <Mic size={18} />
+                            )}
                           </div>
                         )}
                         <button
                           type="button"
                           onClick={() => handleRemoveAttachment(i)}
-                          className="absolute -top-0.5 -right-0.5 size-5 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-slate-800 text-xs"
-                          title="Quitar"
+                          className="absolute -top-1 -right-1 size-5 rounded-full bg-slate-800 text-white grid place-items-center text-xs"
                         >
                           ×
                         </button>
                       </div>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPendingAttachments((prev) => {
-                          prev.forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
-                          return [];
-                        });
-                        setPreviewIndex(0);
-                      }}
-                      className="shrink-0 text-xs text-slate-500 hover:text-red-600 ml-1"
-                    >
-                      Quitar todo
-                    </button>
                   </div>
                 )}
-                <div className="flex items-end gap-2 p-1 border rounded-lg bg-background overflow-hidden relative focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-                  <div className="flex items-center gap-0.5 pb-1.5 pl-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => documentInputRef.current?.click()}
-                      className="size-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground"
-                      title="Adjuntar Documento"
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => imageInputRef.current?.click()}
-                      className="size-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground"
-                      title="Adjuntar Imagen"
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => (isRecording ? handleStopRecording() : handleStartRecording())}
-                      className={`size-9 rounded-lg flex items-center justify-center ${isRecording ? "bg-red-100 text-red-600 animate-pulse" : "text-muted-foreground hover:text-foreground"}`}
-                      title={isRecording ? "Detener grabación" : "Grabar nota de voz"}
-                    >
-                      <Mic className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleImproveText}
-                      disabled={!replyText.trim() || improving}
-                      className="size-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Mejorar texto"
-                    >
-                      <Wand2 className="h-4 w-4" />
-                    </button>
-                  </div>
+
+                <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-(--primarySoft) focus-within:border-(--primaryColor) transition-shadow">
+                  <button
+                    type="button"
+                    onClick={() => documentInputRef.current?.click()}
+                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                    title="Adjuntar Documento"
+                  >
+                    <Paperclip size={17} strokeWidth={1.7} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                    title="Adjuntar Imagen"
+                  >
+                    <ImageIcon size={17} strokeWidth={1.7} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      isRecording ? handleStopRecording() : handleStartRecording()
+                    }
+                    className={cn(
+                      "size-9 rounded-lg grid place-items-center",
+                      isRecording
+                        ? "bg-red-100 text-red-600 animate-pulse"
+                        : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                    )}
+                    title={isRecording ? "Detener grabación" : "Grabar nota de voz"}
+                  >
+                    <Mic size={17} strokeWidth={1.7} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImproveText}
+                    disabled={!replyText.trim() || improving}
+                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Mejorar con IA"
+                  >
+                    <Wand2 size={17} strokeWidth={1.7} />
+                  </button>
                   <input
                     type="text"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
-                    placeholder={pendingAttachments.length ? "Añadir mensaje (opcional)..." : "Escribe tu mensaje como operador..."}
-                    className="flex-1 min-h-[44px] py-2 pl-2 pr-2 bg-transparent border-none text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && !e.shiftKey && handleSendMessage()
+                    }
+                    placeholder={
+                      pendingAttachments.length
+                        ? "Añadir mensaje (opcional)…"
+                        : "Escribe tu mensaje como operador..."
+                    }
+                    className="flex-1 min-h-[40px] py-2 px-2 bg-transparent border-0 outline-none text-sm text-slate-900 placeholder:text-slate-400"
                   />
                   <button
                     type="button"
                     onClick={handleSendMessage}
                     disabled={(!replyText.trim() && !pendingAttachments.length) || sending}
-                    className="size-9 shrink-0 rounded-lg flex items-center justify-center text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="shrink-0 size-9 rounded-lg grid place-items-center text-white disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    style={{ background: "var(--primaryColor)" }}
                     title="Enviar"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send size={16} strokeWidth={1.8} />
                   </button>
                 </div>
-                {sendError && <p className="mt-1 text-xs text-red-600">{sendError}</p>}
+                {sendError && (
+                  <p className="mt-2 text-xs text-red-600">{sendError}</p>
+                )}
               </div>
             </div>
 
-            {/* Panel info contacto (imágenes, videos, datos) */}
+            {/* Panel info contacto */}
             {showContactInfo && (
-              <aside
-                className="w-72 shrink-0 border-l border-slate-200 bg-slate-50/50 flex flex-col overflow-hidden"
-                style={{ backgroundColor: "var(--backgroundSoft)" }}
-              >
-                <div className="p-4 border-b border-slate-200 shrink-0">
-                  <h3 className="text-sm font-semibold" style={{ color: "var(--textPrimary)" }}>
+              <aside className="w-72 shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
+                <div className="p-4 border-b border-slate-100 shrink-0">
+                  <h3 className="text-sm font-bold text-slate-900">
                     Información de contacto
                   </h3>
                   <div className="mt-3 space-y-2 text-sm">
                     <p>
-                      <span className="text-slate-500">Nombre:</span>{" "}
-                      {activeConversation.customerName}
+                      <span className="text-slate-500">Nombre: </span>
+                      <span className="text-slate-900 font-medium">
+                        {activeConversation.customerName}
+                      </span>
                     </p>
                     <p>
-                      <span className="text-slate-500">Canal:</span>{" "}
-                      {activeConversation.channel}
+                      <span className="text-slate-500">Canal: </span>
+                      <span className="text-slate-900 font-medium">
+                        {activeConversation.channel}
+                      </span>
                     </p>
                     <p>
-                      <span className="text-slate-500">Contacto:</span>{" "}
-                      {activeConversation.externalContactId.replace(/^whatsapp:/, "")}
+                      <span className="text-slate-500">Contacto: </span>
+                      <span className="text-slate-900 font-medium">
+                        {conversationPhone}
+                      </span>
                     </p>
                     {hasPriority(activeConversation.priority) && (
-                    <p>
-                      <span className="text-slate-500">Prioridad:</span>{" "}
-                      {PRIORITY_LABELS[activeConversation.priority]}
-                    </p>
+                      <p>
+                        <span className="text-slate-500">Prioridad: </span>
+                        <span className="text-slate-900 font-medium">
+                          {PRIORITY_LABELS[activeConversation.priority]}
+                        </span>
+                      </p>
                     )}
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                    Imágenes y videos enviados
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    Imágenes y videos
                   </h4>
                   {mediaMessages.length === 0 ? (
                     <p className="text-xs text-slate-500">
@@ -1334,7 +1372,10 @@ export default function InboxPage() {
                     <div className="grid grid-cols-2 gap-2">
                       {mediaMessages.map((m) =>
                         m.mediaUrl ? (
-                          <div key={m._id} className="rounded-lg overflow-hidden bg-white border border-slate-200">
+                          <div
+                            key={m._id}
+                            className="rounded-lg overflow-hidden bg-white border border-slate-200"
+                          >
                             {m.mediaType === "video" ? (
                               <video
                                 src={m.mediaUrl}
@@ -1347,8 +1388,15 @@ export default function InboxPage() {
                                 rel="noopener noreferrer"
                                 className="flex flex-col items-center justify-center p-3 aspect-square hover:bg-slate-50 group"
                               >
-                                <div className="size-10 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: "#E53935" }}>PDF</div>
-                                <span className="text-[10px] truncate max-w-full mt-2 text-slate-600 group-hover:text-slate-900">{m.content || "Documento"}</span>
+                                <div
+                                  className="size-10 rounded grid place-items-center text-white font-bold text-xs"
+                                  style={{ backgroundColor: "#E53935" }}
+                                >
+                                  PDF
+                                </div>
+                                <span className="text-[10px] truncate max-w-full mt-2 text-slate-600">
+                                  {m.content || "Documento"}
+                                </span>
                               </a>
                             ) : (
                               <a href={m.mediaUrl} target="_blank" rel="noopener noreferrer">
@@ -1369,31 +1417,32 @@ export default function InboxPage() {
             )}
           </div>
         ) : (
-          /* Área vacía estilo FincasYa */
-          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center bg-[#fafafa]">
-            <div className="animate-in fade-in zoom-in duration-700">
-              <span className="material-symbols-outlined text-6xl text-muted-foreground/60 mb-4 block">
-                forum
-              </span>
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                Bandeja de mensajes
-              </h2>
-              <p className="text-muted-foreground mt-2 max-w-sm text-sm mx-auto">
-                Elige una conversación de la lista lateral para empezar a chatear
-                con tus clientes.
-              </p>
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(true)}
-                className="md:hidden mt-4 rounded-lg px-4 py-2 text-sm font-medium bg-muted hover:bg-muted/80 text-foreground"
-              >
-                Ver conversaciones
-              </button>
+          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <div
+              className="size-16 rounded-2xl grid place-items-center mb-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--primarySoft), var(--primaryLight))",
+              }}
+            >
+              <Bot size={32} strokeWidth={1.5} style={{ color: "var(--primaryColor)" }} />
             </div>
+            <h2 className="text-lg font-bold text-slate-900">Bandeja de mensajes</h2>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm">
+              Elige una conversación de la lista para empezar a chatear con tus
+              clientes.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden mt-4 rounded-lg px-4 py-2 text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700"
+            >
+              Ver conversaciones
+            </button>
           </div>
         )}
 
-        {/* Modales estilo FincasYa */}
+        {/* Modales */}
         {viewerInitialIndex !== null && chatImages.length > 0 && (
           <ImageViewerModal
             images={chatImages}
@@ -1418,15 +1467,15 @@ export default function InboxPage() {
           />
         )}
 
-        {/* Menú contextual (clic derecho) en conversaciones */}
+        {/* Menú contextual */}
         {contextMenu && (
           <div
             ref={contextMenuRef}
-            className="fixed z-100 min-w-[200px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+            className="fixed z-[100] min-w-[210px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-3 py-2 text-xs font-semibold text-slate-500">
+            <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Acciones rápidas
             </div>
             <button
@@ -1434,7 +1483,7 @@ export default function InboxPage() {
               onClick={() => handleSetStatus("closed")}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
             >
-              <CheckCircle2 className="size-4 text-emerald-600" />
+              <CheckCircle2 size={15} className="text-emerald-600" strokeWidth={1.8} />
               Marcar como resuelta
             </button>
             <button
@@ -1442,8 +1491,7 @@ export default function InboxPage() {
               onClick={() => handleSetStatus("open")}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
             >
-              <span className="material-symbols-outlined text-lg">lock_open</span>
-              Marcar como abierta
+              Reabrir conversación
             </button>
             <div className="my-1 h-px bg-slate-100" />
             <button
@@ -1451,7 +1499,7 @@ export default function InboxPage() {
               onClick={() => handleContextMenuSetMode(null)}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
             >
-              <Bot className="size-4" />
+              <Bot size={15} strokeWidth={1.8} />
               Cambiar a Bot
             </button>
             <button
@@ -1460,11 +1508,11 @@ export default function InboxPage() {
               disabled={!getHumanUserId()}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100 disabled:opacity-50 disabled:pointer-events-none"
             >
-              <CircleIcon className="size-4" />
+              <UserRound size={15} strokeWidth={1.8} />
               Cambiar a humano
             </button>
             <div className="my-1 h-px bg-slate-100" />
-            <div className="px-3 py-1 text-[10px] font-medium text-slate-400">
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Prioridad
             </div>
             {(["low", "normal", "high", "urgent"] as const).map((p) => (
@@ -1472,12 +1520,12 @@ export default function InboxPage() {
                 key={p}
                 type="button"
                 onClick={() => handleSetPriority(p)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100",
-                  PRIORITY_COLORS[p]
-                )}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
               >
-                <span className="material-symbols-outlined text-base">flag</span>
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: PRIORITY_DOT[p] }}
+                />
                 {PRIORITY_LABELS[p]}
               </button>
             ))}

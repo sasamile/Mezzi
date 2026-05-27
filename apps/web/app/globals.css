@@ -131,6 +131,38 @@ body {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Asado editorial palette — used by the inbox */
+.asado-theme {
+  --asado-paper: #f4ede1;
+  --asado-paper-alt: #ebe2d2;
+  --asado-cream: #fbf6ec;
+  --asado-surface: #ffffff;
+  --asado-ink: #241a14;
+  --asado-ink-soft: #4a3a2c;
+  --asado-ink-mute: #7e6b56;
+  --asado-ink-faint: #a89478;
+  --asado-line: #d9cdb5;
+  --asado-line-soft: #e8dcc4;
+  --asado-paprika: #a93423;
+  --asado-paprika-deep: #7a2218;
+  --asado-paprika-soft: #f3d8d0;
+  --asado-clay: #c97a4a;
+  --asado-clay-soft: #f4ddc8;
+  --asado-olive: #6b7236;
+  --asado-olive-soft: #e2e4cb;
+  --asado-mustard: #c89826;
+  --asado-mustard-soft: #f3e3b8;
+  --font-serif: var(--font-instrument-serif), "Newsreader", Georgia, serif;
+}
+
+@keyframes asado-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.6); }
+}
+.asado-pulse {
+  animation: asado-pulse 2s infinite;
+}
+
 @keyframes voice-bar {
   0%,
   100% {
