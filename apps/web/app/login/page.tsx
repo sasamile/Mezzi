@@ -49,7 +49,7 @@ const DEFAULT_BRANDING: LoginBranding = {
 };
 
 const HOST_BRANDING: Record<string, LoginBranding> = {
-  "gestia.com.co": {
+  "alcarbon.mezzi.app": {
     logoSrc: "/logos/logoalcarbo.svg",
     logoAlt: "Logo Al Carbón",
     subtitle: "Ingresa tus credenciales para continuar.",
