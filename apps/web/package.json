@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "pdfjs-dist": "^3.11.174",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -17,12 +16,14 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.32.0",
-    "lucide-react": "^0.575.0",
+    "lucide-react": "^1.17.0",
     "next": "16.1.6",
+    "pdfjs-dist": "^3.11.174",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.2",
+    "recharts": "3.8.0",
     "sileo": "^0.1.5",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"

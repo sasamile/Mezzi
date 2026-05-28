@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono, Inter, Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
+import { resolveSiteMetadata } from "@/lib/site-branding";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AuthProvider } from "@/lib/auth-context";
@@ -32,13 +34,10 @@ const jakarta = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700", "800"],
 });
 
-export const metadata: Metadata = {
-  title: "Restaurantes SaaS | Panel Superadmin",
-  description: "Panel Superadmin para gestionar restaurantes, planes, administradores y permisos.",
-  icons: {
-    icon: "/logos/mezzi.icon.svg",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const host = (await headers()).get("host") ?? "";
+  return resolveSiteMetadata(host);
+}
 
 export default function RootLayout({
   children,

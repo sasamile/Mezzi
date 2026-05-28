@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useMemo } from "react";
+import { useQuery } from "convex/react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { useMutation } from "convex/react";
@@ -10,6 +11,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useAuth } from "@/lib/auth-context";
+import { getLoginBranding } from "@/lib/site-branding";
 import { setPersistedTenantId } from "@/lib/tenant-context";
 import {
   Form,
@@ -22,6 +24,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import {
+  DashedGridBackground,
+  dashedGridFadeForHour,
+  type DashedGridFade,
+} from "@/components/login/dashed-grid-background";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Ingresa un correo válido" }),
@@ -31,33 +38,6 @@ const loginSchema = z.object({
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
-
-type LoginBranding = {
-  logoSrc: string;
-  logoAlt: string;
-  subtitle: string;
-  sideImageSrc: string;
-  sideImageAlt: string;
-};
-
-const DEFAULT_BRANDING: LoginBranding = {
-  logoSrc: "/logos/mezzi.svg",
-  logoAlt: "Logo Mezzi",
-  subtitle: "Ingresa tus credenciales para continuar.",
-  sideImageSrc: "/login.png",
-  sideImageAlt: "Imagen de acceso Mezzi",
-};
-
-const HOST_BRANDING: Record<string, LoginBranding> = {
-  "alcarbon.mezzi.app": {
-    logoSrc: "/logos/logoalcarbo.svg",
-    logoAlt: "Logo Al Carbón",
-    subtitle: "Ingresa tus credenciales para continuar.",
-    sideImageSrc:
-      "https://media-cdn.tripadvisor.com/media/photo-m/1280/14/40/1e/7e/vista-del-restaurante.jpg",
-    sideImageAlt: "Vista del restaurante",
-  },
-};
 
 function LoginContent() {
   const router = useRouter();
@@ -82,10 +62,19 @@ function LoginContent() {
     typeof window !== "undefined"
       ? window.location.hostname.toLowerCase().replace(/^www\./, "")
       : "";
-  const branding = useMemo(
-    () => HOST_BRANDING[hostname] ?? DEFAULT_BRANDING,
-    [hostname]
+  const tenantByHost = useQuery(
+    api.tenants.getByHost,
+    hostname ? { host: hostname } : "skip"
   );
+  const branding = useMemo(
+    () => getLoginBranding(hostname, tenantByHost),
+    [hostname, tenantByHost]
+  );
+
+  const [gridFade, setGridFade] = useState<DashedGridFade>("top");
+  useEffect(() => {
+    setGridFade(dashedGridFadeForHour(new Date().getHours()));
+  }, []);
 
   const form = useForm<LoginValues>({
     defaultValues: {
@@ -174,9 +163,26 @@ function LoginContent() {
     );
   }
 
+  const useGridBackground = branding.sidePanel === "dashed-grid";
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 via-zinc-50 to-red-50 px-4 py-10">
-      <div className="grid min-h-[80vh] p-4 w-full max-w-5xl grid-cols-1 overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)] md:grid-cols-2">
+    <div
+      className={
+        useGridBackground
+          ? "relative flex min-h-screen w-full items-center justify-center px-4 py-10"
+          : "flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 via-zinc-50 to-red-50 px-4 py-10"
+      }
+    >
+      {useGridBackground && (
+        <DashedGridBackground fade={gridFade} className="absolute inset-0 z-0" />
+      )}
+      <div
+        className={
+          useGridBackground
+            ? "relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)]"
+            : "grid min-h-[80vh] w-full max-w-5xl grid-cols-1 overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] md:grid-cols-2"
+        }
+      >
         <div className="flex items-center px-6 py-8 sm:px-10">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-4">
@@ -266,14 +272,16 @@ function LoginContent() {
           </div>
         </div>
 
-        <div className="relative h-full  hidden  w-full overflow-hidden bg-[#fff5f5] md:block">
-          <Image
-            src={branding.sideImageSrc}
-            alt={branding.sideImageAlt}
-            fill
-            className="object-cover object-top rounded-3xl"
-          />
-        </div>
+        {!useGridBackground && (
+          <div className="relative hidden h-full w-full overflow-hidden bg-[#fff5f5] md:block">
+            <Image
+              src={branding.sideImageSrc}
+              alt={branding.sideImageAlt}
+              fill
+              className="rounded-3xl object-cover object-top"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

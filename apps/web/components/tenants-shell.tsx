@@ -247,44 +247,44 @@ export function TenantsShell({ children }: TenantsShellProps) {
           boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.04)",
         }}
       >
-        {/* Brand editorial */}
+        {/* Brand */}
         <div
-          className={`flex items-center gap-3 px-4 pt-4 pb-4 shrink-0 border-b border-slate-100 ${collapsed ? "justify-center" : ""}`}
+          className={`shrink-0 border-b border-slate-100 px-3 pt-3 pb-3 ${collapsed ? "flex justify-center" : ""}`}
         >
           <Link
             href="/tenants"
-            className="size-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden transition-transform duration-150 hover:scale-105 active:scale-95"
-            style={{
-              background: displayTenant?.logoUrl
-                ? "#f1f5f9"
-                : `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e)))`,
-              boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
-            }}
+            className={`block overflow-hidden rounded-lg transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98] ${
+              collapsed ? "size-15" : "h-13 w-full"
+            }`}
+            style={
+              !displayTenant?.logoUrl
+                ? {
+                    background: `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e)))`,
+                    boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
+                  }
+                : undefined
+            }
           >
             {isLoading ? (
-              <Utensils size={18} strokeWidth={1.5} className="text-slate-400" />
+              <span className="flex size-full items-center justify-center bg-slate-100">
+                <Utensils size={18} strokeWidth={1.5} className="text-slate-400" />
+              </span>
             ) : displayTenant?.logoUrl ? (
               <img
                 src={proxiedTenantAssetUrl(displayTenant.logoUrl) ?? displayTenant.logoUrl}
                 alt={displayTenant?.name ?? "Logo"}
-                className="size-full object-contain p-1 rounded-xl"
+                className={
+                  collapsed
+                    ? "size-full bg-slate-100 object-contain p-0.5"
+                    : "size-full object-contain object-center"
+                }
               />
             ) : (
-              <span className="text-white font-bold text-base">
+              <span className="flex size-full items-center justify-center text-base font-bold text-white">
                 {(displayTenant?.name ?? "·").charAt(0).toUpperCase()}
               </span>
             )}
           </Link>
-          {!collapsed && (
-            <div className="flex-1 min-w-0 animate-in fade-in slide-in-from-left-2 duration-200">
-              <h1 className="m-0 truncate text-[14px] font-bold text-slate-900 leading-tight">
-                {isLoading ? "Cargando…" : (displayTenant?.name ?? "Selecciona restaurante")}
-              </h1>
-              <p className="text-[10.5px] text-slate-500 truncate mt-0.5">
-                Panel del restaurante
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Navegación */}

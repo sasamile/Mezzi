@@ -46,6 +46,9 @@ export const getStats = query({
     const peakHour =
       Object.entries(byHour).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 12;
 
+    // 24-bucket hourly distribution (0–23)
+    const hourlyDistribution = Array.from({ length: 24 }, (_, h) => byHour[h] ?? 0);
+
     // Variación vs periodo anterior (simulado)
     const prevStart = startMs - rangeDays * MS_DAY;
     const prevConvs = allConvs.filter((c) => c.lastMessageAt >= prevStart && c.lastMessageAt < startMs);
@@ -65,6 +68,7 @@ export const getStats = query({
       humanConversations: humanConvs.length,
       closedByBot: closedByBot.length,
       sparkline,
+      hourlyDistribution,
       peakHour: Number(peakHour),
       changePct,
       recentConversations: convsInRange
