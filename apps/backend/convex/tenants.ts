@@ -259,3 +259,80 @@ export const seedDemo = mutation({
     return { userId, tenants: [t1, t2] };
   },
 });
+
+// ─── PQR Email Routing ────────────────────────────────────────────────────────
+
+/**
+ * Configura (o reemplaza) el routing de emails de PQR para un tenant.
+ *
+ * Cada regla define: módulo + ciudad opcional → correos destino (to) + copia (cc).
+ * Las reglas se evalúan en orden; la primera que coincida gana.
+ *
+ * Ejemplo de uso desde el panel superadmin (o Convex dashboard):
+ * ```
+ * await setPqrEmailRouting({
+ *   tenantId: "<id>",
+ *   routing: AL_CARBON_PQR_ROUTING,
+ * })
+ * ```
+ */
+export const setPqrEmailRouting = mutation({
+  args: {
+    tenantId: v.id("tenants"),
+    routing: v.array(
+      v.object({
+        module: v.string(),
+        cityMatch: v.optional(v.string()),
+        to: v.array(v.string()),
+        cc: v.optional(v.array(v.string())),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant) throw new Error("Tenant no encontrado");
+    await ctx.db.patch(args.tenantId, { pqrEmailRouting: args.routing });
+    return args.tenantId;
+  },
+});
+
+/**
+ * Reglas de routing de PQR para Al Carbon.
+ * Puede usarse directamente en el Convex dashboard:
+ *
+ *   mutation: tenants.setPqrEmailRouting
+ *   args: { tenantId: "<id_alcarbon>", routing: AL_CARBON_PQR_ROUTING }
+ *
+ * Módulos que el bot debe enviar en el campo `module` de la PQR:
+ *   calidad_alimentos | limpieza | facturacion | domicilios | sugerencias
+ *   infraestructura | trabaja_nosotros | proveedores
+ */
+export const AL_CARBON_PQR_ROUTING = [
+  // 🍔 Calidad de Alimentos y Bebidas
+  { module: "calidad_alimentos",  to: ["servicioalcliente@alcarbonasados.com"] },
+  // ✨ Limpieza e Higiene
+  { module: "limpieza",           to: ["servicioalcliente@alcarbonasados.com"] },
+  // 💳 Facturación y Pagos
+  { module: "facturacion",        to: ["administrativa@alcarbonasados.com"] },
+  // 🛵 Domicilios
+  { module: "domicilios",         to: ["servicioalcliente@alcarbonasados.com"] },
+  // 💡 Sugerencias y Felicitaciones
+  { module: "sugerencias",        to: ["servicioalcliente@alcarbonasados.com"] },
+  // 🛋️ Infraestructura
+  { module: "infraestructura",    to: ["servicioalcliente@alcarbonasados.com"] },
+  // 🧑‍💼 Trabaja con Nosotros — Medellín (evaluado primero)
+  {
+    module: "trabaja_nosotros",
+    cityMatch: "medellin",
+    to:  ["auxrecursohumano@alcarbonasados.com"],
+    cc:  ["recursohumano@alcarbonasados.com"],
+  },
+  // 🧑‍💼 Trabaja con Nosotros — Bogotá, Rionegro, Barranquilla, Apartado, Villavicencio (y cualquier otra ciudad)
+  {
+    module: "trabaja_nosotros",
+    to:  ["auxrecursohumano2@alcarbonasados.com"],
+    cc:  ["recursohumano@alcarbonasados.com"],
+  },
+  // 🏭 PQRS Proveedores
+  { module: "proveedores",        to: ["compras@alcarbonasados.com"] },
+] as const;

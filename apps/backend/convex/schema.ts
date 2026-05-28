@@ -26,8 +26,30 @@ export default defineSchema({
     logoUrl: v.optional(v.string()),
     address: v.optional(v.string()),
     phone: v.optional(v.string()),
-    /** Correos para notificar cuando se crea una PQR (Brevo) */
+    /** Correos para notificar cuando se crea una PQR (Brevo) — fallback global */
     pqrNotificationEmails: v.optional(v.array(v.string())),
+    /**
+     * Routing de PQR por módulo: si existe, el email se enruta al correo correspondiente
+     * según el campo `module` de la PQR.  Cada regla se evalúa en orden; la primera que
+     * coincida gana.  Si ninguna coincide, se cae en pqrNotificationEmails.
+     *
+     * `cityMatch` es un substring case-insensitive del campo `customerCity` de la PQR.
+     * Ejemplo: cityMatch: "medellin" coincide con "Medellín", "medellin", "MEDELLIN", etc.
+     */
+    pqrEmailRouting: v.optional(
+      v.array(
+        v.object({
+          /** Clave del módulo tal como la escribe el bot en pqr.module */
+          module: v.string(),
+          /** Si se especifica, la regla solo aplica si customerCity incluye este texto */
+          cityMatch: v.optional(v.string()),
+          /** Destinatarios principales */
+          to: v.array(v.string()),
+          /** Copia (CC) */
+          cc: v.optional(v.array(v.string())),
+        })
+      )
+    ),
     /** Módulos habilitados por restaurante. undefined = todos habilitados (compatibilidad) */
     enabledModules: v.optional(
       v.object({
@@ -345,8 +367,15 @@ export default defineSchema({
     customerName: v.string(), // "Anónimo" si es PQR anónima
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
+    customerCity: v.optional(v.string()), // ciudad del cliente (usado en routing "trabaja con nosotros")
     subject: v.string(),
     description: v.string(),
+    /**
+     * Módulo o intención detectada por el bot.
+     * Ejemplos: "calidad_alimentos", "limpieza", "facturacion", "domicilios",
+     * "sugerencias", "infraestructura", "trabaja_nosotros", "proveedores"
+     */
+    module: v.optional(v.string()),
     status: v.union(
       v.literal("open"),
       v.literal("in_progress"),
