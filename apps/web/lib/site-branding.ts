@@ -14,6 +14,8 @@ export type LoginBranding = {
   sideImageAlt: string;
   /** Panel derecho del login en desktop */
   sidePanel: LoginSidePanel;
+  /** Color del botón "Iniciar sesión" (hex). Por defecto rojo Mezzi. */
+  accentColor?: string;
 };
 
 type HostBrandingOverride = {
@@ -59,6 +61,7 @@ const HOST_OVERRIDES: Record<string, HostBrandingOverride> = {
       logoSrc: "/logos/urbrands.png",
       logoAlt: "UR Brands",
       sidePanel: "dashed-grid",
+      accentColor: "#171717",
     },
   },
 };
@@ -113,16 +116,22 @@ function metadataFromParts(parts: {
 
 export function getLoginBranding(
   rawHost: string,
-  tenant?: { name: string; logoUrl?: string | null } | null
+  tenant?: {
+    name: string;
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+  } | null
 ): LoginBranding {
   const host = stripHostHeader(rawHost);
   const override = host ? HOST_OVERRIDES[host] : undefined;
+  const staticLogo = override?.login?.logoSrc ?? override?.icon;
 
   if (tenant) {
+    // En hosts dedicados, el logo estático en /public es más fiable que URLs de BD.
     const logo =
+      staticLogo ??
       proxiedTenantAssetUrl(tenant.logoUrl) ??
       tenant.logoUrl?.trim() ??
-      override?.login?.logoSrc ??
       DEFAULT_LOGIN.logoSrc;
     return {
       logoSrc: logo,
@@ -131,6 +140,10 @@ export function getLoginBranding(
       sideImageSrc: override?.login?.sideImageSrc ?? DEFAULT_LOGIN.sideImageSrc,
       sideImageAlt: override?.login?.sideImageAlt ?? DEFAULT_LOGIN.sideImageAlt,
       sidePanel: override?.login?.sidePanel ?? DEFAULT_LOGIN.sidePanel,
+      accentColor:
+        tenant.primaryColor?.trim() ||
+        override?.login?.accentColor ||
+        undefined,
     };
   }
 
@@ -138,7 +151,11 @@ export function getLoginBranding(
     return {
       ...DEFAULT_LOGIN,
       logoSrc: override.login?.logoSrc ?? override.icon,
-      logoAlt: override.login?.logoAlt ?? override.title.split("|")[0]?.trim() ?? DEFAULT_LOGIN.logoAlt,
+      logoAlt:
+        override.login?.logoAlt ??
+        override.title.split("|")[0]?.trim() ??
+        DEFAULT_LOGIN.logoAlt,
+      accentColor: override.login?.accentColor,
       ...override.login,
     };
   }

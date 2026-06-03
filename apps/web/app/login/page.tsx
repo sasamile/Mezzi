@@ -78,6 +78,11 @@ function LoginContent() {
     () => getLoginBranding(hostname, tenantByHost),
     [hostname, tenantByHost]
   );
+  const [logoSrc, setLogoSrc] = useState(branding.logoSrc);
+
+  useEffect(() => {
+    setLogoSrc(branding.logoSrc);
+  }, [branding.logoSrc]);
 
   const [gridFade, setGridFade] = useState<DashedGridFade>("top");
   useEffect(() => {
@@ -197,15 +202,20 @@ function LoginContent() {
             <div className="space-y-4">
               <div className="flex justify-center px-2">
                 <Image
-                  src={branding.logoSrc}
+                  src={logoSrc}
                   alt={branding.logoAlt}
-                  width={200}
-                  height={88}
+                  width={260}
+                  height={43}
                   priority
+                  unoptimized={logoSrc.startsWith("/")}
+                  onError={() => {
+                    const fallback = getLoginBranding(hostname, null).logoSrc;
+                    if (fallback && fallback !== logoSrc) setLogoSrc(fallback);
+                  }}
                   className={
                     useGridBackground
-                      ? "h-auto w-full max-w-46 object-contain"
-                      : "h-auto w-full max-w-50 object-contain"
+                      ? "h-auto w-full max-w-[220px] object-contain"
+                      : "h-auto w-full max-w-[240px] object-contain"
                   }
                 />
               </div>
@@ -276,8 +286,18 @@ function LoginContent() {
                 <div className="pt-2">
                   <Button
                     type="submit"
+                    variant={branding.accentColor ? "ghost" : "default"}
                     disabled={isSubmitting}
-                    className="h-11 w-full rounded-2xl px-4"
+                    className={
+                      branding.accentColor
+                        ? "h-11 w-full rounded-2xl px-4 text-white hover:opacity-90"
+                        : "h-11 w-full rounded-2xl px-4"
+                    }
+                    style={
+                      branding.accentColor
+                        ? { backgroundColor: branding.accentColor }
+                        : undefined
+                    }
                   >
                     {isSubmitting ? "Entrando..." : "Iniciar sesión"}
                   </Button>

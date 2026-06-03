@@ -198,7 +198,7 @@ Kinds válidos de side_effect:
   "escalate_to_human"      — pasar a agente humano (args: {})
   "mark_resolved"          — cerrar conversación (args: {})
   "search_job_vacancies"   — buscar vacantes (args: city? o cityFilter?)
-  "search_products"        — buscar productos URBRANDS en WooCommerce (args: search = marca + tipo, ej "Gucci tenis")
+  "search_products"        — buscar productos URBRANDS en WooCommerce. Args: search (texto libre) O por separado marca (ej "LV"), categoria (ej "sandalias"), talla (ej "39"). IMPORTANTE: siempre emitir este side_effect antes de decir que NO hay stock.
   "create_pqr"             — registrar PQR: Petición, Queja, Reclamo, Sugerencia o Felicitación
                              args OBLIGATORIOS: type (petition|complaint|claim|suggestion|compliment), subject (>5 chars), description (>10 chars)
                              args opcionales: customerName, customerEmail, customerPhone, sede

@@ -734,11 +734,14 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         }
 
         if (turn?.side_effect?.kind === "search_products" && isUrbrands) {
-          const searchArg = turn.side_effect.args?.search;
-          const searchQuery =
-            typeof searchArg === "string" && searchArg.trim()
-              ? searchArg.trim()
-              : clientText.trim();
+          const args = turn.side_effect.args ?? {};
+          const parts = [
+            typeof args.marca === "string" ? args.marca.trim() : "",
+            typeof args.categoria === "string" ? args.categoria.trim() : "",
+            typeof args.talla === "string" ? String(args.talla).trim() : "",
+            typeof args.search === "string" ? args.search.trim() : "",
+          ].filter(Boolean);
+          const searchQuery = parts.length ? parts.join(" ") : clientText.trim();
           const productsMd = await searchUrbrandsProductsMarkdown(searchQuery);
           const turn2 = await restaurantTurnWithOpenClaw({
             ...openClawBase,
