@@ -8,6 +8,10 @@ import { internal } from "../_generated/api";
 import { api } from "../_generated/api";
 import rag from "./ai/rag";
 import { supportAgent } from "./ai/agents/supportAgent";
+import { urbrandsAgent } from "./ai/agents/urbrandsAgent";
+import { searchProducts } from "./ai/tools/searchProducts";
+import { isUrbrandsTenant } from "./urbrands";
+import { transcribeAudioFromUrl } from "./ai/transcribe";
 import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
 import {
@@ -41,6 +45,7 @@ import {
   applyOpenClawSideEffect,
   getVacanciesMarkdownForOpenClaw,
 } from "./agent/openclawSideEffects";
+import { searchUrbrandsProductsMarkdown } from "./urbrands";
 
 const CHANNEL_VALIDATOR = v.union(
   v.literal("whatsapp"),
@@ -304,8 +309,13 @@ export const processInboundMessageBatched = internalAction({
 
       for (const msg of pendingMsgs) {
         if (msg.mediaType === "audio" && msg.mediaUrl) {
-          if (openclawOnly) {
-            resolvedParts.push("[AUDIO SIN TRANSCRIPCIÓN]");
+          // Transcribe notas de voz con Whisper (no disponible en modo OpenClaw-only).
+          let transcript = "";
+          if (!openclawOnly) {
+            transcript = await transcribeAudioFromUrl(msg.mediaUrl);
+          }
+          if (transcript) {
+            resolvedParts.push(`[AUDIO TRANSCRITO: "${transcript}"]`);
           } else {
             resolvedParts.push("[AUDIO SIN TRANSCRIPCIÓN]");
           }
@@ -342,6 +352,7 @@ export const processInboundMessageBatched = internalAction({
       const tenant = await ctx.runQuery(api.tenants.get, {
         tenantId: args.tenantId,
       });
+      const isUrbrands = isUrbrandsTenant(tenant);
       const modules = tenant?.enabledModules ?? {};
       const hasReservas = modules.reservas !== false;
       const hasPedidos = modules.pedidos !== false;
@@ -355,7 +366,9 @@ export const processInboundMessageBatched = internalAction({
       if (hasTrabajaConNosotros) enabledList.push("trabaja con nosotros");
 
       const modulesContext =
-        enabledList.length > 0
+        isUrbrands
+          ? ""
+          : enabledList.length > 0
           ? `[MÓDULOS HABILITADOS - OBLIGATORIO]
 Este restaurante tiene habilitados estos módulos transaccionales: ${enabledList.join(", ")}. También puedes buscar en la base de conocimiento (menú, horarios, sedes, etc.).
 NO uses herramientas de módulos que no estén habilitados (ej. no uses createOrderTool si pedidos no está habilitado). Sin embargo, SIEMPRE sigue las instrucciones del prompt del restaurante para flujos informativos (domicilios, preguntas frecuentes, etc.) aunque no sean un módulo habilitado.
@@ -478,7 +491,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
       const CITY_REGEX =
         /(medell[ií]n|bogot[aá]|barranquilla|rionegro|villavicencio|urab[aá]|bello|envigado|itag[uü][ií]?|sabaneta)/i;
 
-      if (shouldPreloadRag) {
+      if (shouldPreloadRag && !isUrbrands) {
         if (openclawOnly) {
           try {
             const knowledgeItems = await ctx.runQuery(api.knowledge.listByTenant, {
@@ -659,7 +672,9 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             customerContext.replace(/\s+/g, " ").trim(),
           1200
         );
-        const modulesLine = `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`;
+        const modulesLine = isUrbrands
+          ? "URBRANDS: tienda ropa/accesorios. Catálogo WooCommerce (search_products), entrega inmediata Villavicencio, por encargo EE.UU./Europa."
+          : `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`;
 
         const pdfsLine =
           availablePdfs && availablePdfs.length > 0
@@ -713,6 +728,34 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
                 ? `Aquí está la información de vacantes que tenemos registrada:\n\n${vacMd.trim()}`
                 : (turn.assistant_message?.trim() ??
                   "No encontré vacantes para ese criterio. ¿Puedes indicar otra ciudad?"),
+              side_effect: null,
+            };
+          }
+        }
+
+        if (turn?.side_effect?.kind === "search_products" && isUrbrands) {
+          const searchArg = turn.side_effect.args?.search;
+          const searchQuery =
+            typeof searchArg === "string" && searchArg.trim()
+              ? searchArg.trim()
+              : clientText.trim();
+          const productsMd = await searchUrbrandsProductsMarkdown(searchQuery);
+          const turn2 = await restaurantTurnWithOpenClaw({
+            ...openClawBase,
+            productLookupFromConvex: productsMd,
+            productRefinementPass: true,
+          });
+          if (turn2) {
+            turn = turn2;
+          } else {
+            console.warn(
+              "YCloud OpenClaw: refinado productos falló (sin turno 2); envío listado desde Convex"
+            );
+            turn = {
+              assistant_message: productsMd.trim()
+                ? `Estas son las opciones que encontré:\n\n${productsMd.trim()}`
+                : (turn.assistant_message?.trim() ??
+                  "No encontré ese producto en inventario inmediato. ¿Te interesa la opción por encargo?"),
               side_effect: null,
             };
           }
@@ -804,6 +847,10 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
 
       // ─── Ramal supportAgent (OpenAI) ────────────────────────────────────────
 
+      const tenantContextLabel = isUrbrands
+        ? "Configuración del negocio URBRANDS"
+        : "Contexto del restaurante";
+
       const promptWithContext =
         modulesContext +
         customerContext +
@@ -812,38 +859,51 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         preloadedRagContext +
         imageContext +
         (tenantPrompt?.prompt?.trim()
-          ? `[Contexto del restaurante:]\n${tenantPrompt.prompt}\n\n`
+          ? `[${tenantContextLabel}:]\n${tenantPrompt.prompt}\n\n`
           : "") +
         lastQuestionContext +
         `[Cliente dice:]\n${clientText}`;
 
-      const tools: Record<string, unknown> = {
-        searchTool: search,
-        sendPdfTool: sendPdf,
-        updateCustomerInfoTool: updateCustomerInfo,
-        escalateConversationTool: escalateConversation,
-        setPriorityTool: setPriority,
-        resolveConversationTool: resolveConversation,
-      };
-      if (hasReservas) {
+      // URBRANDS usa su propio agente (Danna) y un set de tools dedicado:
+      // búsqueda de productos WooCommerce en lugar de las herramientas de restaurante.
+      const agent = isUrbrands ? urbrandsAgent : supportAgent;
+
+      const tools: Record<string, unknown> = isUrbrands
+        ? {
+            searchProductsTool: searchProducts,
+            sendPdfTool: sendPdf,
+            updateCustomerInfoTool: updateCustomerInfo,
+            escalateConversationTool: escalateConversation,
+            setPriorityTool: setPriority,
+            resolveConversationTool: resolveConversation,
+          }
+        : {
+            searchTool: search,
+            sendPdfTool: sendPdf,
+            updateCustomerInfoTool: updateCustomerInfo,
+            escalateConversationTool: escalateConversation,
+            setPriorityTool: setPriority,
+            resolveConversationTool: resolveConversation,
+          };
+      if (!isUrbrands && hasReservas) {
         tools.createReservationTool = createReservation;
         tools.cancelReservationTool = cancelReservation;
         tools.updateReservationTool = updateReservation;
       }
-      if (hasPedidos) {
+      if (!isUrbrands && hasPedidos) {
         tools.createOrderTool = createOrder;
         tools.updateOrderTool = updateOrder;
         tools.cancelOrderTool = cancelOrder;
       }
-      if (hasPqr) tools.createPQRTool = createPQR;
-      if (hasTrabajaConNosotros) {
+      if (!isUrbrands && hasPqr) tools.createPQRTool = createPQR;
+      if (!isUrbrands && hasTrabajaConNosotros) {
         tools.searchVacanciesTool = searchVacancies;
       }
 
       let agentResult: Awaited<ReturnType<typeof supportAgent.generateText>> | null = null;
       try {
         if (isVisionMessage) {
-          agentResult = await supportAgent.generateText(
+          agentResult = await agent.generateText(
             ctx,
             { threadId: args.threadId },
             {
@@ -860,7 +920,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             }
           );
         } else {
-          agentResult = await supportAgent.generateText(
+          agentResult = await agent.generateText(
             ctx,
             { threadId: args.threadId },
             {
@@ -997,7 +1057,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           let sent = false;
 
           try {
-            const continuationResult = await supportAgent.generateText(
+            const continuationResult = await agent.generateText(
               ctx,
               { threadId: args.threadId },
               {
@@ -1022,7 +1082,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           if (!sent) {
             await new Promise((r) => setTimeout(r, 300));
             const messagesAfter: PaginationResult<MessageDoc> =
-              await supportAgent.listMessages(ctx, {
+              await agent.listMessages(ctx, {
                 threadId: args.threadId,
                 paginationOpts: { numItems: 100, cursor: null },
               });

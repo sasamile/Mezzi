@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { TenantProvider } from "@/lib/tenant-context";
+import { useHostScopedTenant } from "@/lib/use-host-scoped-tenant";
 import { TenantsShell } from "../../components/tenants-shell";
+
+function HostScopedTenantBinder() {
+  useHostScopedTenant();
+  return null;
+}
 
 export default function TenantsLayout({
   children,
@@ -31,6 +37,7 @@ export default function TenantsLayout({
 
   return (
     <TenantProvider>
+      <HostScopedTenantBinder />
       <TenantsShell>{children}</TenantsShell>
     </TenantProvider>
   );

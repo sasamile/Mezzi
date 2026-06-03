@@ -11,6 +11,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useAuth } from "@/lib/auth-context";
+import { allowsSuperadminPanel } from "@/lib/saas-host-access";
 import { getLoginBranding } from "@/lib/site-branding";
 import { setPersistedTenantId } from "@/lib/tenant-context";
 import {
@@ -44,24 +45,31 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const { user, isLoading, login } = useAuth();
 
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) return;
-    const returnUrl = searchParams.get("redirect") ?? searchParams.get("returnUrl");
-    if (returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//")) {
-      router.replace(returnUrl);
-    } else if (user.isSuperadmin) {
-      router.replace("/superadmin");
-    } else {
-      router.replace("/tenants");
-    }
-  }, [user, isLoading, searchParams, router]);
-  const authLogin = useMutation(api.auth.login);
-  const [showPassword, setShowPassword] = useState(false);
   const hostname =
     typeof window !== "undefined"
       ? window.location.hostname.toLowerCase().replace(/^www\./, "")
       : "";
+  const canAccessSuperadmin = allowsSuperadminPanel(hostname);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) return;
+    const returnUrl = searchParams.get("redirect") ?? searchParams.get("returnUrl");
+    const safeReturn =
+      returnUrl &&
+      returnUrl.startsWith("/") &&
+      !returnUrl.startsWith("//") &&
+      (!returnUrl.startsWith("/superadmin") || canAccessSuperadmin);
+    if (safeReturn) {
+      router.replace(returnUrl);
+    } else if (user.isSuperadmin && canAccessSuperadmin) {
+      router.replace("/superadmin");
+    } else {
+      router.replace("/tenants");
+    }
+  }, [user, isLoading, searchParams, router, canAccessSuperadmin]);
+  const authLogin = useMutation(api.auth.login);
+  const [showPassword, setShowPassword] = useState(false);
   const tenantByHost = useQuery(
     api.tenants.getByHost,
     hostname ? { host: hostname } : "skip"
@@ -125,7 +133,7 @@ function LoginContent() {
         title: "Bienvenido",
         description: user.name ? `Hola, ${user.name}` : "Sesión iniciada.",
       });
-      if (user.isSuperadmin) {
+      if (user.isSuperadmin && canAccessSuperadmin) {
         router.push("/superadmin");
       } else {
         router.push("/tenants");
@@ -157,8 +165,9 @@ function LoginContent() {
 
   if (isLoading || user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 via-zinc-50 to-red-50">
-        <p className="text-slate-600">Cargando...</p>
+      <div className="relative flex min-h-screen items-center justify-center px-4">
+        <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
+        <p className="relative z-10 text-slate-600">Cargando...</p>
       </div>
     );
   }
@@ -186,15 +195,21 @@ function LoginContent() {
         <div className="flex items-center px-6 py-8 sm:px-10">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-4">
-              <div className="flex justify-center">
+              <div className="flex justify-center px-2">
                 <Image
                   src={branding.logoSrc}
                   alt={branding.logoAlt}
-                  width={180}
-                  height={80}
+                  width={200}
+                  height={88}
+                  priority
+                  className={
+                    useGridBackground
+                      ? "h-auto w-full max-w-46 object-contain"
+                      : "h-auto w-full max-w-50 object-contain"
+                  }
                 />
               </div>
-              <p className="text-sm text-zinc-500 text-center">
+              <p className="text-center text-sm text-zinc-500">
                 {branding.subtitle}
               </p>
             </div>
@@ -291,8 +306,9 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 via-zinc-50 to-red-50">
-          <p className="text-slate-600">Cargando...</p>
+        <div className="relative flex min-h-screen items-center justify-center px-4">
+          <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
+          <p className="relative z-10 text-slate-600">Cargando...</p>
         </div>
       }
     >

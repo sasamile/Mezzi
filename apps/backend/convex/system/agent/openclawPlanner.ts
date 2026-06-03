@@ -30,6 +30,10 @@ export type RestaurantTurnInput = {
   vacancyLookupFromConvex?: string;
   /** true = el modelo solo redacta usando vacancyLookup; side_effect debe ser null salvo PDF/reserva */
   vacancyRefinementPass?: boolean;
+  /** Resultado de búsqueda de productos URBRANDS/WooCommerce (segunda pasada) */
+  productLookupFromConvex?: string;
+  /** true = redactar usando productLookupFromConvex */
+  productRefinementPass?: boolean;
 };
 
 export type OpenClawTurnResult = {
@@ -194,6 +198,7 @@ Kinds válidos de side_effect:
   "escalate_to_human"      — pasar a agente humano (args: {})
   "mark_resolved"          — cerrar conversación (args: {})
   "search_job_vacancies"   — buscar vacantes (args: city? o cityFilter?)
+  "search_products"        — buscar productos URBRANDS en WooCommerce (args: search = marca + tipo, ej "Gucci tenis")
   "create_pqr"             — registrar PQR: Petición, Queja, Reclamo, Sugerencia o Felicitación
                              args OBLIGATORIOS: type (petition|complaint|claim|suggestion|compliment), subject (>5 chars), description (>10 chars)
                              args opcionales: customerName, customerEmail, customerPhone, sede
@@ -212,7 +217,7 @@ Reglas globales:
 - PQRS: cuando el manual diga "llama a createPQRTool" o el cliente haya dado tipo + asunto + descripción, emite side_effect create_pqr. NO sigas preguntando si ya tienes los 3 datos. BUSCA en todo el dialogHint (historial): si el cliente ya describió su queja/problema en un turno anterior, usa esa descripción como "description" y genera un "subject" resumido. El "type" se infiere del contexto (queja sobre comida/atención = complaint; sugerencia = suggestion; etc.). El "subject" es un resumen breve (~10 palabras). La "description" es lo que contó el cliente. NUNCA pidas al cliente que repita lo que ya dijo.
 - Reservas: solo con datos completos (nombre, fecha, hora, personas).
 - CONTEXTO DE CONVERSACIÓN: dialogHint contiene el historial reciente de la conversación completa. Lee TODO el historial antes de responder. Si el cliente ya proporcionó cualquier dato (nombre, email, sede, descripción de queja, barrio, ciudad, etc.) en turnos anteriores, úsalo directamente. NUNCA vuelvas a pedir información que el cliente ya dio en el historial. Esto es CRÍTICO para el flujo de PQRS: si el cliente ya describió su problema, usa esa descripción para crear el ticket inmediatamente.
-${refinement ? "- PASADA DE REFINADO: ya recibiste vacancyLookupFromConvex. Redacta usando SOLO esa lista. side_effect null salvo PDF/reserva/escalar/cerrar.\n" : ""}`;
+${refinement ? "- PASADA DE REFINADO: ya recibiste vacancyLookupFromConvex o productLookupFromConvex. Redacta usando SOLO esa lista. side_effect null salvo PDF/reserva/escalar/cerrar.\n" : ""}`;
   return base;
 }
 
@@ -237,7 +242,9 @@ export async function restaurantTurnWithOpenClaw(
 
   if (!authToken) return null;
 
-  const refinement = Boolean(input.vacancyRefinementPass);
+  const refinement = Boolean(
+    input.vacancyRefinementPass || input.productRefinementPass
+  );
   const payload = {
     role: "restaurant_whatsapp_turn",
     outputContract: buildTurnOutputContract(refinement),
@@ -255,6 +262,11 @@ export async function restaurantTurnWithOpenClaw(
     ...(input.vacancyLookupFromConvex?.trim()
       ? {
           vacancyLookupFromConvex: input.vacancyLookupFromConvex.trim(),
+        }
+      : {}),
+    ...(input.productLookupFromConvex?.trim()
+      ? {
+          productLookupFromConvex: input.productLookupFromConvex.trim(),
         }
       : {}),
     imageNote:

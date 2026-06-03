@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Id } from "@/convex";
+import { getHostLogoSrc } from "@/lib/site-branding";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
 import { cn } from "@/lib/utils";
 import {
@@ -102,6 +103,14 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const isLoading = tenantId && tenant === undefined && !hasLoadedTenantRef.current;
   // Usar último tenant conocido durante revalidaciones para evitar parpadeos
   const displayTenant = tenant ?? (hasLoadedTenantRef.current ? lastTenantRef.current : null);
+
+  const hostLogoSrc =
+    typeof window !== "undefined" ? getHostLogoSrc(window.location.hostname) : undefined;
+  const brandLogoSrc =
+    (displayTenant?.logoUrl &&
+      (proxiedTenantAssetUrl(displayTenant.logoUrl) ?? displayTenant.logoUrl)) ||
+    hostLogoSrc;
+  const hasBrandLogo = Boolean(brandLogoSrc);
 
   const ycloudConnected = ycloud?.connected ?? false;
   const primaryColor = isLoading ? LOADING_PRIMARY : (displayTenant?.primaryColor ?? LOADING_PRIMARY);
@@ -257,7 +266,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
               collapsed ? "size-15" : "h-13 w-full"
             }`}
             style={
-              !displayTenant?.logoUrl
+              !hasBrandLogo
                 ? {
                     background: `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e)))`,
                     boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
@@ -269,9 +278,9 @@ export function TenantsShell({ children }: TenantsShellProps) {
               <span className="flex size-full items-center justify-center bg-slate-100">
                 <Utensils size={18} strokeWidth={1.5} className="text-slate-400" />
               </span>
-            ) : displayTenant?.logoUrl ? (
+            ) : hasBrandLogo ? (
               <img
-                src={proxiedTenantAssetUrl(displayTenant.logoUrl) ?? displayTenant.logoUrl}
+                src={brandLogoSrc}
                 alt={displayTenant?.name ?? "Logo"}
                 className={
                   collapsed

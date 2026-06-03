@@ -13,6 +13,7 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "@/convex";
 import { useAuth } from "@/lib/auth-context";
+import { allowsSuperadminPanel } from "@/lib/saas-host-access";
 import Image from "next/image";
 
 interface SuperadminShellProps {
@@ -30,6 +31,12 @@ export function SuperadminShell({ children }: SuperadminShellProps) {
 
   useEffect(() => {
     if (isLoading) return;
+    const host =
+      typeof window !== "undefined" ? window.location.hostname : "";
+    if (!allowsSuperadminPanel(host)) {
+      router.replace("/tenants");
+      return;
+    }
     if (!user || !user.isSuperadmin) {
       router.replace("/login");
     }

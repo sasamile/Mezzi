@@ -319,6 +319,9 @@ export async function applyOpenClawSideEffect(
       case "search_job_vacancies":
         return { ok: true };
 
+      case "search_products":
+        return { ok: true };
+
       default:
         return { ok: true };
     }

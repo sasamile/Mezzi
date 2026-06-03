@@ -6,6 +6,7 @@ import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
+import { useHostScopedTenant } from "@/lib/use-host-scoped-tenant";
 import Link from "next/link";
 import {
   MessageSquare,
@@ -254,10 +255,7 @@ export default function TenantsPage() {
     api.users.getTenantsForUser,
     user?._id ? { userId: user._id as Id<"users"> } : "skip"
   );
-  const scopedTenant = useQuery(
-    api.tenants.getByHost,
-    typeof window !== "undefined" ? { host: window.location.hostname } : "skip"
-  );
+  const scopedTenant = useHostScopedTenant();
 
   const tenants =
     memberships
@@ -265,10 +263,7 @@ export default function TenantsPage() {
       .filter((t): t is NonNullable<typeof t> => t != null) ?? [];
 
   React.useEffect(() => {
-    if (scopedTenant) {
-      setTenantId(scopedTenant._id);
-      return;
-    }
+    if (scopedTenant) return;
     if (memberships?.length === 1 && memberships[0]?.tenant) {
       setTenantId(memberships[0].tenant._id);
     }

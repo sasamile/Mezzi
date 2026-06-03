@@ -1,43 +1,29 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { allowsSuperadminPanel } from "@/lib/saas-host-access";
 
 function stripHost(host: string) {
   return host.split(":")[0]?.toLowerCase().replace(/^www\./, "") ?? "";
 }
 
 /**
- * Dominio “oficial” del SaaS (ej. restaurantes.cloud).
- * En Vercel: Project → Settings → Environment Variables:
- * NEXT_PUBLIC_SAAS_HOST=restaurantes.cloud
- *
- * En dominios personalizados de clientes (ej. gestia.com.co) no debe existir el panel superadmin:
- * es la misma app, pero solo rutas de tenant + login.
+ * Panel superadmin solo en el dominio raíz del SaaS (ej. mezzi.app).
+ * Subdominios (alcarbon.mezzi.app, urbrands.mezzi.app) y dominios custom de tenants
+ * solo tienen login + panel /tenants.
  */
 export function middleware(request: NextRequest) {
-  const saasHost = process.env.NEXT_PUBLIC_SAAS_HOST?.trim();
-  if (!saasHost) return NextResponse.next();
-
-  const primary = stripHost(saasHost);
-  if (!primary) return NextResponse.next();
-
-  const rawHost = request.headers.get("host") ?? "";
-  const host = stripHost(rawHost);
-
-  const isPrimary =
-    host === primary ||
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host.endsWith(".vercel.app");
-
-  if (isPrimary) return NextResponse.next();
-
-  if (request.nextUrl.pathname.startsWith("/superadmin")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  if (!request.nextUrl.pathname.startsWith("/superadmin")) {
+    return NextResponse.next();
   }
 
-  return NextResponse.next();
+  const host = stripHost(request.headers.get("host") ?? "");
+  if (allowsSuperadminPanel(host)) {
+    return NextResponse.next();
+  }
+
+  const url = request.nextUrl.clone();
+  url.pathname = "/tenants";
+  return NextResponse.redirect(url);
 }
 
 export const config = {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEDICATED_TENANT_HOSTS } from "@/lib/dedicated-tenant-hosts";
 import { fetchTenantByHost } from "@/lib/fetch-tenant-by-host";
 import { normalizeHost } from "@/lib/normalize-host";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
@@ -28,7 +29,7 @@ const DEFAULT_LOGIN: LoginBranding = {
   subtitle: "Ingresa tus credenciales para continuar.",
   sideImageSrc: "/login.png",
   sideImageAlt: "Imagen de acceso Mezzi",
-  sidePanel: "image",
+  sidePanel: "dashed-grid",
 };
 
 const SAAS_METADATA = {
@@ -50,7 +51,29 @@ const HOST_OVERRIDES: Record<string, HostBrandingOverride> = {
       sidePanel: "dashed-grid",
     },
   },
+  "urbrands.mezzi.app": {
+    title: "UR Brands | Panel",
+    description: "Panel de administración de UR Brands.",
+    icon: "/logos/urbrands.png",
+    login: {
+      logoSrc: "/logos/urbrands.png",
+      logoAlt: "UR Brands",
+      sidePanel: "dashed-grid",
+    },
+  },
 };
+
+/** Hosts con panel de restaurante dedicado (sin superadmin). */
+export function getDedicatedTenantHosts(): string[] {
+  return [...DEDICATED_TENANT_HOSTS];
+}
+
+/** Logo estático por host (sidebar/login cuando el tenant no tiene logo en BD). */
+export function getHostLogoSrc(rawHost: string): string | undefined {
+  const host = stripHostHeader(rawHost);
+  const override = host ? HOST_OVERRIDES[host] : undefined;
+  return override?.login?.logoSrc ?? override?.icon;
+}
 
 function stripHostHeader(host: string) {
   return normalizeHost(host);

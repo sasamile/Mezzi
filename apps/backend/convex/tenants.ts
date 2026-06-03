@@ -260,6 +260,38 @@ export const seedDemo = mutation({
   },
 });
 
+const URBRANDS_DOMAIN = "urbrands.mezzi.app";
+
+/**
+ * Crea el tenant UR Brands con dominio dedicado (idempotente).
+ * Ejecutar: `bun run seed:urbrands` en apps/backend
+ */
+export const seedUrbrands = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tenants = await ctx.db.query("tenants").collect();
+    const existing = tenants.find(
+      (t) => normalizeHost(t.customDomain) === URBRANDS_DOMAIN
+    );
+    if (existing) {
+      return { tenantId: existing._id, created: false };
+    }
+
+    const now = Date.now();
+    const tenantId = await ctx.db.insert("tenants", {
+      name: "UR Brands",
+      status: "active",
+      customDomain: URBRANDS_DOMAIN,
+      logoUrl: "/logos/urbrands.png",
+      primaryColor: "#171717",
+      secondaryColor: "#64748b",
+      createdAt: now,
+    });
+
+    return { tenantId, created: true };
+  },
+});
+
 // ─── PQR Email Routing ────────────────────────────────────────────────────────
 
 /**
