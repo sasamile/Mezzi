@@ -107,11 +107,30 @@ function metadataFromParts(parts: {
   description: string;
   icon: string;
 }): Metadata {
+  const iconType = parts.icon.endsWith(".png")
+    ? "image/png"
+    : parts.icon.endsWith(".svg")
+      ? "image/svg+xml"
+      : undefined;
+
   return {
     title: parts.title,
     description: parts.description,
-    icons: { icon: parts.icon },
+    icons: {
+      icon: iconType ? [{ url: parts.icon, type: iconType }] : parts.icon,
+      shortcut: parts.icon,
+      apple: parts.icon,
+    },
   };
+}
+
+function resolveMetadataIcon(
+  host: string,
+  tenantLogoUrl?: string | null
+): string {
+  const override = HOST_OVERRIDES[host];
+  const staticIcon = override?.icon ?? override?.login?.logoSrc;
+  return staticIcon ?? tenantIcon(tenantLogoUrl);
 }
 
 export function getLoginBranding(
@@ -170,16 +189,19 @@ export async function resolveSiteMetadata(rawHost: string): Promise<Metadata> {
     return metadataFromParts(SAAS_METADATA);
   }
 
+  const override = HOST_OVERRIDES[host];
   const tenant = await fetchTenantByHost(host);
+
   if (tenant) {
     return metadataFromParts({
-      title: `${tenant.name} | Panel`,
-      description: `Panel de administración de ${tenant.name}.`,
-      icon: tenantIcon(tenant.logoUrl),
+      title: override?.title ?? `${tenant.name} | Panel`,
+      description:
+        override?.description ??
+        `Panel de administración de ${tenant.name}.`,
+      icon: resolveMetadataIcon(host, tenant.logoUrl),
     });
   }
 
-  const override = HOST_OVERRIDES[host];
   if (override) {
     return metadataFromParts(override);
   }
