@@ -290,12 +290,15 @@ function LoginContent() {
                     disabled={isSubmitting}
                     className={
                       branding.accentColor
-                        ? "h-11 w-full rounded-2xl px-4 text-white hover:opacity-90"
+                        ? "h-11 w-full rounded-2xl px-4 !text-white hover:!text-white hover:opacity-90"
                         : "h-11 w-full rounded-2xl px-4"
                     }
                     style={
                       branding.accentColor
-                        ? { backgroundColor: branding.accentColor }
+                        ? {
+                            backgroundColor: branding.accentColor,
+                            color: "#ffffff",
+                          }
                         : undefined
                     }
                   >
