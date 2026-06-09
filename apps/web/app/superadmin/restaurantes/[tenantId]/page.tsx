@@ -130,6 +130,8 @@ export default function RestauranteDetailPage() {
                 <ModulosTab
                   tenantId={tenant._id}
                   enabledModules={tenant.enabledModules}
+                  tenantName={tenant.name}
+                  customDomain={tenant.customDomain}
                 />
               )}
               {activeTab === "administradores" && (

@@ -2,6 +2,7 @@ import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { api, internal } from "../../../_generated/api";
 import type { Id } from "../../../_generated/dataModel";
+import { isPdfsModuleEnabled } from "../../alcarbon";
 
 interface TenantPdf {
   _id: Id<"tenantPdfs">;
@@ -40,6 +41,13 @@ export const sendPdf = createTool({
       { threadId: ctx.threadId }
     );
     if (!conversation) return "Conversación no encontrada.";
+
+    const tenant = await ctx.runQuery(api.tenants.get, {
+      tenantId: conversation.tenantId,
+    });
+    if (!isPdfsModuleEnabled(tenant)) {
+      return "Este restaurante no tiene habilitado el envío de PDFs por WhatsApp.";
+    }
 
     const allPdfs = (await ctx.runQuery(api.pdfs.list, {
       tenantId: conversation.tenantId,

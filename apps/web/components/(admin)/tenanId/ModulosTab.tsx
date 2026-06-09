@@ -6,6 +6,7 @@ import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { sileo } from "sileo";
 import { TENANT_MODULES } from "@/constants";
+import { isPdfsModuleEnabled } from "@/lib/alcarbon";
 import { cn } from "@/lib/utils";
 
 type TenantModules = {
@@ -14,15 +15,22 @@ type TenantModules = {
   reservas?: boolean;
   conocimiento?: boolean;
   trabajaConNosotros?: boolean;
+  pdfs?: boolean;
 };
 
 export function ModulosTab({
   tenantId,
   enabledModules,
+  tenantName,
+  customDomain,
 }: {
   tenantId: Id<"tenants">;
   enabledModules?: TenantModules | null;
+  tenantName?: string;
+  customDomain?: string | null;
 }) {
+  const tenantIdentity = { name: tenantName, customDomain };
+  const defaultPdfs = isPdfsModuleEnabled(enabledModules, tenantIdentity);
   const updateTenant = useMutation(api.tenants.update);
   const [modules, setModules] = useState<TenantModules>(() => ({
     pqr: enabledModules?.pqr ?? true,
@@ -30,6 +38,7 @@ export function ModulosTab({
     reservas: enabledModules?.reservas ?? true,
     conocimiento: enabledModules?.conocimiento ?? true,
     trabajaConNosotros: enabledModules?.trabajaConNosotros ?? true,
+    pdfs: defaultPdfs,
   }));
   const [saving, setSaving] = useState(false);
 
@@ -40,8 +49,9 @@ export function ModulosTab({
       reservas: enabledModules?.reservas ?? true,
       conocimiento: enabledModules?.conocimiento ?? true,
       trabajaConNosotros: enabledModules?.trabajaConNosotros ?? true,
+      pdfs: isPdfsModuleEnabled(enabledModules, tenantIdentity),
     });
-  }, [enabledModules]);
+  }, [enabledModules, tenantName, customDomain]);
 
   const handleToggle = (key: keyof TenantModules, value: boolean) => {
     setModules((prev) => ({ ...prev, [key]: value }));

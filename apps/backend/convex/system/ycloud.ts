@@ -11,6 +11,7 @@ import { supportAgent } from "./ai/agents/supportAgent";
 import { urbrandsAgent } from "./ai/agents/urbrandsAgent";
 import { searchProducts } from "./ai/tools/searchProducts";
 import { isUrbrandsTenant } from "./urbrands";
+import { isPdfsModuleEnabled } from "./alcarbon";
 import { transcribeAudioFromUrl } from "./ai/transcribe";
 import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
@@ -358,6 +359,7 @@ export const processInboundMessageBatched = internalAction({
       const hasPedidos = modules.pedidos !== false;
       const hasPqr = modules.pqr !== false;
       const hasTrabajaConNosotros = modules.trabajaConNosotros !== false;
+      const hasPdfs = isPdfsModuleEnabled(tenant);
 
       const enabledList: string[] = [];
       if (hasReservas) enabledList.push("reservas");
@@ -388,11 +390,13 @@ ${!hasTrabajaConNosotros
         tenantId: args.tenantId,
       });
 
-      const availablePdfs = await ctx.runQuery(api.pdfs.list, {
-        tenantId: args.tenantId,
-      });
+      const availablePdfs = hasPdfs
+        ? await ctx.runQuery(api.pdfs.list, {
+            tenantId: args.tenantId,
+          })
+        : [];
       const pdfsContext =
-        availablePdfs && availablePdfs.length > 0
+        hasPdfs && availablePdfs && availablePdfs.length > 0
           ? `[PDFs DISPONIBLES PARA ENVIAR]\nPuedes enviar los siguientes documentos usando sendPdfTool con el label exacto:\n${availablePdfs.map((p: { label: string }) => `- "${p.label}"`).join("\n")}\nREGLA PRIORITARIA:\n- Si el cliente pide menú, decoraciones, promociones o cualquier documento disponible, usa sendPdfTool.\n- Si existe un PDF que coincida con lo pedido, NO compartas enlaces externos (Drive, etc.). Envía el PDF configurado en este módulo.\n[Fin PDFs DISPONIBLES]\n\n`
           : "";
 
@@ -677,7 +681,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           : `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`;
 
         const pdfsLine =
-          availablePdfs && availablePdfs.length > 0
+          hasPdfs && availablePdfs && availablePdfs.length > 0
             ? `PDFs (labels exactos): ${availablePdfs
                 .map((p: { label: string }) => p.label)
                 .join(", ")}`
@@ -775,6 +779,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
               contactId: args.contactId,
               customerName: args.customerName,
               hasReservas,
+              hasPdfs,
             },
             turn.side_effect ?? null
           );
@@ -874,7 +879,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
       const tools: Record<string, unknown> = isUrbrands
         ? {
             searchProductsTool: searchProducts,
-            sendPdfTool: sendPdf,
+            ...(hasPdfs ? { sendPdfTool: sendPdf } : {}),
             updateCustomerInfoTool: updateCustomerInfo,
             escalateConversationTool: escalateConversation,
             setPriorityTool: setPriority,
@@ -882,7 +887,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           }
         : {
             searchTool: search,
-            sendPdfTool: sendPdf,
+            ...(hasPdfs ? { sendPdfTool: sendPdf } : {}),
             updateCustomerInfoTool: updateCustomerInfo,
             escalateConversationTool: escalateConversation,
             setPriorityTool: setPriority,

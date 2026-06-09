@@ -19,6 +19,7 @@ export const TENANT_MODULES = [
   { key: "pedidos" as const, label: "Pedidos", description: "Tomar y gestionar pedidos por WhatsApp" },
   { key: "reservas" as const, label: "Reservas", description: "Reservar mesas desde el chat" },
   { key: "conocimiento" as const, label: "Conocimiento / Aprendizaje", description: "Base de conocimiento y RAG para el Bot" },
+  { key: "pdfs" as const, label: "Documentos PDF", description: "PDFs que el bot puede enviar por WhatsApp (menú, promociones, etc.)" },
   { key: "trabajaConNosotros" as const, label: "Trabaja con Nosotros", description: "Vacantes, ubicaciones y postulaciones vía chat" },
 ] as const;
 

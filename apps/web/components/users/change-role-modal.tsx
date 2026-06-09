@@ -42,7 +42,14 @@ interface ChangeRoleModalProps {
   userName: string;
   currentRole: string;
   currentAllowedPages?: string[];
-  enabledModules?: { pqr?: boolean; pedidos?: boolean; reservas?: boolean; conocimiento?: boolean };
+  enabledModules?: {
+    pqr?: boolean;
+    pedidos?: boolean;
+    reservas?: boolean;
+    conocimiento?: boolean;
+    pdfs?: boolean;
+  };
+  tenant?: { customDomain?: string | null; name?: string | null } | null;
   userTenantId: Id<"userTenants">;
   primaryColor: string;
   onSave: (
@@ -59,13 +66,19 @@ export function ChangeRoleModal({
   currentRole,
   currentAllowedPages,
   enabledModules,
+  tenant,
   userTenantId,
   primaryColor,
   onSave,
 }: ChangeRoleModalProps) {
   const visiblePages = React.useMemo(
-    () => getVisiblePermissionPages(enabledModules),
-    [enabledModules]
+    () =>
+      getVisiblePermissionPages(
+        enabledModules,
+        tenant,
+        typeof window !== "undefined" ? window.location.hostname : undefined
+      ),
+    [enabledModules, tenant]
   );
   const allPageKeys = visiblePages.map((p) => p.key);
   const defaultAllowed = currentAllowedPages?.length ? currentAllowedPages : allPageKeys;

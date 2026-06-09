@@ -18,6 +18,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Id } from "@/convex";
 import { getHostLogoSrc } from "@/lib/site-branding";
+import { isPdfsModuleEnabled } from "@/lib/alcarbon";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
 import { cn } from "@/lib/utils";
 import {
@@ -58,7 +59,7 @@ interface NavEntry {
   disabled?: boolean;
   disabledTitle?: string;
   /** Requiere este módulo habilitado. undefined = siempre visible */
-  module?: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros";
+  module?: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs";
 }
 
 export function TenantsShell({ children }: TenantsShellProps) {
@@ -133,8 +134,16 @@ export function TenantsShell({ children }: TenantsShellProps) {
     pathname === href || (href !== "/tenants" && pathname.startsWith(href));
 
   const modules = displayTenant?.enabledModules;
-  const hasModule = (key: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros") =>
-    modules?.[key] !== false;
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : undefined;
+  const hasModule = (
+    key: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs"
+  ) => {
+    if (key === "pdfs") {
+      return isPdfsModuleEnabled(modules, displayTenant, host);
+    }
+    return modules?.[key] !== false;
+  };
 
   const allowedPages = membership?.allowedPages;
   const hasPageAccess = (pageKey: string) => {
@@ -168,6 +177,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
       Icon: FileText,
       label: "Documentos PDF",
       group: "Conocimiento",
+      module: "pdfs" as const,
     },
     {
       href: `${baseHref}/aprendizaje`,
@@ -226,7 +236,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
     { href: `${baseHref}/users`, pageKey: "users", Icon: Users, label: "Usuarios", group: "Usuarios" },
   ].filter((e) => {
     if (!tenantId && e.group !== "General") return false;
-    const m = e.module as "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | undefined;
+    const m = e.module as "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs" | undefined;
     if (m && !hasModule(m)) return false;
     if (!hasPageAccess(e.pageKey)) return false;
     return true;

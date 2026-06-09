@@ -59,6 +59,7 @@ import type * as system_ai_tools_updateOrder from "../system/ai/tools/updateOrde
 import type * as system_ai_tools_updateReservation from "../system/ai/tools/updateReservation.js";
 import type * as system_ai_transcribe from "../system/ai/transcribe.js";
 import type * as system_ai_urbrandsPrompts from "../system/ai/urbrandsPrompts.js";
+import type * as system_alcarbon from "../system/alcarbon.js";
 import type * as system_conversations from "../system/conversations.js";
 import type * as system_googleCalendarSync from "../system/googleCalendarSync.js";
 import type * as system_orders from "../system/orders.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "system/ai/tools/updateReservation": typeof system_ai_tools_updateReservation;
   "system/ai/transcribe": typeof system_ai_transcribe;
   "system/ai/urbrandsPrompts": typeof system_ai_urbrandsPrompts;
+  "system/alcarbon": typeof system_alcarbon;
   "system/conversations": typeof system_conversations;
   "system/googleCalendarSync": typeof system_googleCalendarSync;
   "system/orders": typeof system_orders;

@@ -35,8 +35,13 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const host = (await headers()).get("host") ?? "";
-  return resolveSiteMetadata(host);
+  const hostHeader = (await headers()).get("host") ?? "";
+  const meta = await resolveSiteMetadata(hostHeader);
+  const protocol = hostHeader.includes("localhost") ? "http" : "https";
+  return {
+    ...meta,
+    metadataBase: new URL(`${protocol}://${hostHeader || "localhost"}`),
+  };
 }
 
 export default function RootLayout({

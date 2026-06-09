@@ -339,6 +339,7 @@ export default function UsersPage() {
         onOpenChange={setInviteOpen}
         primaryColor={primaryColor}
         enabledModules={tenant?.enabledModules}
+        tenant={tenant}
         onCreateUser={handleCreateUser}
       />
 
@@ -350,6 +351,7 @@ export default function UsersPage() {
           currentRole={changeRoleMember.role}
           currentAllowedPages={changeRoleMember.allowedPages}
           enabledModules={tenant?.enabledModules}
+          tenant={tenant}
           userTenantId={changeRoleMember._id}
           primaryColor={primaryColor}
           onSave={handleSaveRole}

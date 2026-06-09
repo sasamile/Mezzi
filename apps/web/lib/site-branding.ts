@@ -3,6 +3,7 @@ import { DEDICATED_TENANT_HOSTS } from "@/lib/dedicated-tenant-hosts";
 import { fetchTenantByHost } from "@/lib/fetch-tenant-by-host";
 import { normalizeHost } from "@/lib/normalize-host";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
+import { DEFAULT_FAVICON, getSiteIconForHost } from "@/lib/site-favicons";
 
 export type LoginSidePanel = "image" | "dashed-grid";
 
@@ -14,7 +15,7 @@ export type LoginBranding = {
   sideImageAlt: string;
   /** Panel derecho del login en desktop */
   sidePanel: LoginSidePanel;
-  /** Color del botón "Iniciar sesión" (hex). Por defecto rojo Mezzi. */
+  /** Color del bot?n "Iniciar sesi?n" (hex). Por defecto rojo Mezzi. */
   accentColor?: string;
 };
 
@@ -41,21 +42,21 @@ const SAAS_METADATA = {
   icon: "/logos/mezzi.icon.svg",
 };
 
-/** Overrides por host cuando aún no hay tenant en BD o para assets extra (ej. imagen lateral login). */
+/** Overrides por host cuando a?n no hay tenant en BD o para assets extra (ej. imagen lateral login). */
 const HOST_OVERRIDES: Record<string, HostBrandingOverride> = {
   "alcarbon.mezzi.app": {
-    title: "Al Carbón | Panel",
-    description: "Panel de administración de Al Carbón.",
+    title: "Al Carb?n | Panel",
+    description: "Panel de administraci?n de Al Carb?n.",
     icon: "/logos/logoalcarbo.svg",
     login: {
       logoSrc: "/logos/logoalcarbo.svg",
-      logoAlt: "Logo Al Carbón",
+      logoAlt: "Logo Al Carb?n",
       sidePanel: "dashed-grid",
     },
   },
   "urbrands.mezzi.app": {
     title: "UR Brands | Panel",
-    description: "Panel de administración de UR Brands.",
+    description: "Panel de administraci?n de UR Brands.",
     icon: "/logos/urbrands.png",
     login: {
       logoSrc: "/logos/urbrands.png",
@@ -71,7 +72,7 @@ export function getDedicatedTenantHosts(): string[] {
   return [...DEDICATED_TENANT_HOSTS];
 }
 
-/** Logo estático por host (sidebar/login cuando el tenant no tiene logo en BD). */
+/** Logo est?tico por host (sidebar/login cuando el tenant no tiene logo en BD). */
 export function getHostLogoSrc(rawHost: string): string | undefined {
   const host = stripHostHeader(rawHost);
   const override = host ? HOST_OVERRIDES[host] : undefined;
@@ -130,7 +131,10 @@ function resolveMetadataIcon(
 ): string {
   const override = HOST_OVERRIDES[host];
   const staticIcon = override?.icon ?? override?.login?.logoSrc;
-  return staticIcon ?? tenantIcon(tenantLogoUrl);
+  if (staticIcon) return staticIcon;
+  const dedicated = getSiteIconForHost(host);
+  if (dedicated !== DEFAULT_FAVICON) return dedicated;
+  return tenantIcon(tenantLogoUrl);
 }
 
 export function getLoginBranding(
@@ -146,7 +150,7 @@ export function getLoginBranding(
   const staticLogo = override?.login?.logoSrc ?? override?.icon;
 
   if (tenant) {
-    // En hosts dedicados, el logo estático en /public es más fiable que URLs de BD.
+    // En hosts dedicados, el logo est?tico en /public es m?s fiable que URLs de BD.
     const logo =
       staticLogo ??
       proxiedTenantAssetUrl(tenant.logoUrl) ??
@@ -197,7 +201,7 @@ export async function resolveSiteMetadata(rawHost: string): Promise<Metadata> {
       title: override?.title ?? `${tenant.name} | Panel`,
       description:
         override?.description ??
-        `Panel de administración de ${tenant.name}.`,
+        `Panel de administraci?n de ${tenant.name}.`,
       icon: resolveMetadataIcon(host, tenant.logoUrl),
     });
   }
@@ -208,7 +212,7 @@ export async function resolveSiteMetadata(rawHost: string): Promise<Metadata> {
 
   return metadataFromParts({
     title: "Restaurantes | Panel",
-    description: "Panel de administración.",
+    description: "Panel de administraci?n.",
     icon: SAAS_METADATA.icon,
   });
 }

@@ -93,6 +93,7 @@ const enabledModulesValidator = v.optional(
     reservas: v.optional(v.boolean()),
     conocimiento: v.optional(v.boolean()),
     trabajaConNosotros: v.optional(v.boolean()),
+    pdfs: v.optional(v.boolean()),
   })
 );
 

@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
+import { useRequireModule } from "@/lib/use-require-module";
 import { useRef, useState } from "react";
 import {
   FileText,
@@ -127,6 +128,7 @@ function PdfRow({
 }
 
 export default function DocumentosPage() {
+  useRequireModule("pdfs");
   const { tenantId } = useTenant();
   const pdfs = useQuery(api.pdfs.list, tenantId ? { tenantId } : "skip") as PdfDoc[] | undefined;
   const generateUploadUrl = useMutation(api.pdfs.generateUploadUrl);

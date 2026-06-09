@@ -42,6 +42,7 @@ export async function applyOpenClawSideEffect(
     contactId: string;
     customerName: string;
     hasReservas: boolean;
+    hasPdfs: boolean;
   },
   effect: OpenClawSideEffect | null | undefined
 ): Promise<{ ok: boolean; errorMessage?: string; toolSentWhatsApp?: boolean }> {
@@ -82,6 +83,12 @@ export async function applyOpenClawSideEffect(
       }
 
       case "send_document_pdf": {
+        if (!opts.hasPdfs) {
+          return {
+            ok: false,
+            errorMessage: "Este restaurante no tiene habilitado el envío de PDFs.",
+          };
+        }
         const label = String(effect.args?.label ?? "").trim();
         if (!label) {
           return { ok: false, errorMessage: "Falta el label del PDF." };

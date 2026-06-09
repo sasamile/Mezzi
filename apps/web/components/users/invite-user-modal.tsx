@@ -33,7 +33,14 @@ interface InviteUserModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   primaryColor: string;
-  enabledModules?: { pqr?: boolean; pedidos?: boolean; reservas?: boolean; conocimiento?: boolean };
+  enabledModules?: {
+    pqr?: boolean;
+    pedidos?: boolean;
+    reservas?: boolean;
+    conocimiento?: boolean;
+    pdfs?: boolean;
+  };
+  tenant?: { customDomain?: string | null; name?: string | null } | null;
   onCreateUser: (data: CreateUserFormData) => Promise<void>;
 }
 
@@ -42,11 +49,17 @@ export function InviteUserModal({
   onOpenChange,
   primaryColor,
   enabledModules,
+  tenant,
   onCreateUser,
 }: InviteUserModalProps) {
   const visiblePages = React.useMemo(
-    () => getVisiblePermissionPages(enabledModules),
-    [enabledModules]
+    () =>
+      getVisiblePermissionPages(
+        enabledModules,
+        tenant,
+        typeof window !== "undefined" ? window.location.hostname : undefined
+      ),
+    [enabledModules, tenant]
   );
   const defaultAllowed = visiblePages.map((p) => p.key);
   const [form, setForm] = React.useState<CreateUserFormData>({
