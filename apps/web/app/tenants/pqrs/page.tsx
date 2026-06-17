@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useRequireModule } from "@/lib/use-require-module";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { Plus, Search, MessageSquare, AlertCircle, FileWarning, Lightbulb, Star } from "lucide-react";
+import { Plus, Search, MessageSquare, AlertCircle, FileWarning, Lightbulb, Star, Mail, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -74,6 +74,8 @@ export default function PQRsPage() {
   });
   const [resolutionNotes, setResolutionNotes] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [resending, setResending] = React.useState(false);
+  const [resendMessage, setResendMessage] = React.useState<string | null>(null);
 
   const tenant = useQuery(api.tenants.get, tenantId ? { tenantId } : "skip");
   const pqrs = useQuery(
@@ -89,6 +91,7 @@ export default function PQRsPage() {
   const createPqr = useMutation(api.pqrs.create);
   const updatePqr = useMutation(api.pqrs.update);
   const removePqr = useMutation(api.pqrs.remove);
+  const resendNotificationEmail = useAction(api.pqrs.resendNotificationEmail);
   const detailPqr = detailId ? pqrs?.find((p) => p._id === detailId) : null;
 
   const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
@@ -166,6 +169,32 @@ export default function PQRsPage() {
       alert(err instanceof Error ? err.message : "Error al eliminar");
     }
   };
+
+  const handleResendEmail = async () => {
+    if (!detailId) return;
+    setResending(true);
+    setResendMessage(null);
+    try {
+      const result = await resendNotificationEmail({ pqrId: detailId });
+      if (result.ok) {
+        const ccNote =
+          result.cc.length > 0 ? ` (con copia a ${result.cc.join(", ")})` : "";
+        setResendMessage(`Correo reenviado a ${result.to.join(", ")}${ccNote}`);
+      } else {
+        setResendMessage(result.error ?? "No se pudo reenviar el correo");
+      }
+    } catch (err) {
+      setResendMessage(err instanceof Error ? err.message : "Error al reenviar");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!detailId) {
+      setResendMessage(null);
+    }
+  }, [detailId]);
 
   if (!tenantId) {
     return (
@@ -509,6 +538,37 @@ export default function PQRsPage() {
                   <p className="text-sm text-slate-700 whitespace-pre-wrap">{detailPqr.resolutionNotes}</p>
                 </div>
               )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-sm font-medium text-slate-700">Notificación por correo</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Reenvía al área correspondiente. Si el cliente tiene email, recibe copia (CC).
+                </p>
+                {resendMessage && (
+                  <p
+                    className={cn(
+                      "mt-2 text-xs",
+                      resendMessage.startsWith("Correo reenviado")
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                    )}
+                  >
+                    {resendMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleResendEmail}
+                  disabled={resending}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {resending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Mail className="size-4" strokeWidth={2} />
+                  )}
+                  {resending ? "Reenviando…" : "Reenviar correo"}
+                </button>
+              </div>
               {detailPqr.status === "open" || detailPqr.status === "in_progress" ? (
                 <>
                   <div>

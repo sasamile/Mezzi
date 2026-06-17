@@ -265,6 +265,15 @@ export async function applyOpenClawSideEffect(
         const pqrPhone = typeof a.customerPhone === "string"
           ? a.customerPhone.trim() || undefined
           : phoneFromContact(contactId) || undefined;
+        const pqrCity =
+          (typeof a.customerCity === "string" && a.customerCity.trim()) ||
+          (typeof a.sede === "string" && a.sede.trim()) ||
+          (typeof a.city === "string" && a.city.trim()) ||
+          undefined;
+        const pqrModule =
+          typeof a.module === "string" && a.module.trim()
+            ? a.module.trim()
+            : undefined;
 
         try {
           const pqrId: Id<"pqrs"> = await ctx.runMutation(api.pqrs.create, {
@@ -273,6 +282,8 @@ export async function applyOpenClawSideEffect(
             customerName: pqrName,
             customerEmail: pqrEmail,
             customerPhone: pqrPhone,
+            customerCity: pqrCity,
+            module: pqrModule,
             subject,
             description,
             source: "whatsapp",

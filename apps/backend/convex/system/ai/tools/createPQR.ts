@@ -15,6 +15,8 @@ export const createPQR = createTool({
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
+    customerCity?: string;
+    module?: string;
     subject: string;
     description: string;
   }>({
@@ -29,6 +31,15 @@ export const createPQR = createTool({
       customerName: { type: "string", description: "Nombre del cliente (opcional; si no hay, PQR anónima)" },
       customerPhone: { type: "string", description: "Teléfono (opcional)" },
       customerEmail: { type: "string", description: "Email (opcional)" },
+      customerCity: {
+        type: "string",
+        description: "Ciudad o sede del cliente (ej. Medellín, Bogotá). Requerido para routing de Trabaja con Nosotros.",
+      },
+      module: {
+        type: "string",
+        description:
+          'Módulo de routing del restaurante. Valores: calidad_alimentos, limpieza, facturacion, domicilios, sugerencias, infraestructura, trabaja_nosotros, proveedores. OBLIGATORIO si el manual del restaurante lo indica.',
+      },
       subject: { type: "string", description: "Asunto o resumen de la PQR" },
       description: { type: "string", description: "Descripción detallada" },
     },
@@ -84,6 +95,8 @@ export const createPQR = createTool({
       customerName: args.customerName?.trim() || "Anónimo",
       customerPhone: args.customerPhone?.trim() || undefined,
       customerEmail: args.customerEmail?.trim() || undefined,
+      customerCity: args.customerCity?.trim() || undefined,
+      module: args.module?.trim() || undefined,
       subject,
       description,
       source: "whatsapp",

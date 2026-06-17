@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { ALCARBON_DOMAIN } from "./system/alcarbon";
 
 function normalizeHost(value?: string): string | null {
   if (!value) return null;
@@ -369,3 +370,33 @@ export const AL_CARBON_PQR_ROUTING = [
   // 🏭 PQRS Proveedores
   { module: "proveedores",        to: ["compras@alcarbonasados.com"] },
 ] as const;
+
+/**
+ * Aplica AL_CARBON_PQR_ROUTING al tenant Al Carbón (idempotente).
+ * Ejecutar una vez: `bun run seed:alcarbon:pqr-routing` en apps/backend
+ */
+export const ensureAlcarbonPqrRouting = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tenants = await ctx.db.query("tenants").collect();
+    const tenant = tenants.find(
+      (t) =>
+        normalizeHost(t.customDomain) === ALCARBON_DOMAIN ||
+        /al carb[oó]n/i.test(t.name)
+    );
+    if (!tenant) {
+      throw new Error(
+        "Tenant Al Carbón no encontrado. Verifica customDomain o nombre del restaurante."
+      );
+    }
+    await ctx.db.patch(tenant._id, {
+      pqrEmailRouting: AL_CARBON_PQR_ROUTING.map((rule) => ({
+        module: rule.module,
+        cityMatch: "cityMatch" in rule ? rule.cityMatch : undefined,
+        to: [...rule.to],
+        cc: "cc" in rule && rule.cc ? [...rule.cc] : undefined,
+      })),
+    });
+    return { tenantId: tenant._id, tenantName: tenant.name, applied: true };
+  },
+});

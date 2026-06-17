@@ -8,7 +8,8 @@
     "deploy": "convex deploy",
     "seed:superadmin": "npx convex run auth:upsertSuperadmin '{\"email\":\"admin@mezzi.com\",\"password\":\"admin\",\"name\":\"Mezzi Admin\"}'",
     "seed:urbrands": "npx convex run tenants:seedUrbrands",
-    "seed:urbrands:prompt": "npx convex run urbrands:seedUrbrandsPrompt"
+    "seed:urbrands:prompt": "npx convex run urbrands:seedUrbrandsPrompt",
+    "seed:alcarbon:pqr-routing": "npx convex run tenants:ensureAlcarbonPqrRouting"
   },
   "dependencies": {
     "@ai-sdk/openai": "1.3.23",

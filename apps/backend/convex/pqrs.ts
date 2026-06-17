@@ -1,4 +1,4 @@
-import { internalAction, mutation, query } from "./_generated/server";
+import { action, internalAction, mutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
@@ -107,46 +107,128 @@ function normalize(s: string) {
     .trim();
 }
 
+const TYPE_DEFAULT_MODULE: Partial<
+  Record<
+    "petition" | "complaint" | "claim" | "suggestion" | "compliment",
+    string
+  >
+> = {
+  suggestion: "sugerencias",
+  compliment: "sugerencias",
+};
+
+/** Infiere el módulo de routing a partir del texto cuando el bot no lo envió. */
+function inferModuleFromText(subject: string, description: string): string | undefined {
+  const text = normalize(`${subject} ${description}`);
+  if (/factur|pago|cuenta|recibo/.test(text)) return "facturacion";
+  if (/domicil|delivery|repart|pedido/.test(text)) return "domicilios";
+  if (/limp|higien|bano|baño|aseo/.test(text)) return "limpieza";
+  if (/infra|mueble|silla|mesa|instalac|local|sede/.test(text)) return "infraestructura";
+  if (/proveedor|suministro|compra/.test(text)) return "proveedores";
+  if (/trabaj|vacante|empleo|curriculum|curriculo|hoja de vida/.test(text))
+    return "trabaja_nosotros";
+  if (/suger|felicit|agradec|compliment/.test(text)) return "sugerencias";
+  if (/comida|plato|bebida|alimento|sabor|calidad|carne|pollo/.test(text))
+    return "calidad_alimentos";
+  return undefined;
+}
+
+function resolvePqrModule(
+  pqr: {
+    type: string;
+    module?: string;
+    subject: string;
+    description: string;
+  }
+): string | undefined {
+  const explicit = pqr.module?.trim();
+  if (explicit) return explicit;
+
+  const fromType = TYPE_DEFAULT_MODULE[pqr.type as keyof typeof TYPE_DEFAULT_MODULE];
+  if (fromType) return fromType;
+
+  const fromText = inferModuleFromText(pqr.subject, pqr.description);
+  if (fromText) return fromText;
+
+  if (pqr.type === "complaint" || pqr.type === "claim") {
+    return "calidad_alimentos";
+  }
+
+  if (pqr.type === "petition") {
+    return "calidad_alimentos";
+  }
+
+  return undefined;
+}
+
 /**
  * Dado el tenant y la PQR, devuelve { to, cc } resueltos.
  *
  * Lógica:
- * 1. Si el tenant tiene pqrEmailRouting Y la PQR tiene module → busca la primera
+ * 1. Si el tenant tiene pqrEmailRouting → infiere o usa pqr.module y busca la primera
  *    regla cuyo module coincida (exacto, normalizado) y, si tiene cityMatch, que el
  *    customerCity de la PQR incluya ese substring (normalizado).
  * 2. Si no hay match en el routing → cae en pqrNotificationEmails (comportamiento anterior).
  * 3. Si tampoco hay pqrNotificationEmails → no se envía nada.
  */
 function resolveRecipients(
-  tenant: { pqrEmailRouting?: Array<{ module: string; cityMatch?: string; to: string[]; cc?: string[] }>; pqrNotificationEmails?: string[] },
-  pqr: { module?: string; customerCity?: string }
+  tenant: {
+    name?: string;
+    pqrEmailRouting?: Array<{ module: string; cityMatch?: string; to: string[]; cc?: string[] }>;
+    pqrNotificationEmails?: string[];
+  },
+  pqr: {
+    type: string;
+    module?: string;
+    customerCity?: string;
+    subject: string;
+    description: string;
+  }
 ): { to: string[]; cc: string[] } | null {
   const routing = tenant.pqrEmailRouting ?? [];
+  const pqrModule = resolvePqrModule(pqr);
 
-  if (routing.length > 0 && pqr.module) {
-    const pqrModule = normalize(pqr.module);
+  if (routing.length > 0 && pqrModule) {
+    const normalizedModule = normalize(pqrModule);
     const pqrCity = pqr.customerCity ? normalize(pqr.customerCity) : "";
 
     for (const rule of routing) {
-      if (normalize(rule.module) !== pqrModule) continue;
-      // Si la regla tiene cityMatch, el city del cliente debe incluirlo
+      if (normalize(rule.module) !== normalizedModule) continue;
       if (rule.cityMatch && !pqrCity.includes(normalize(rule.cityMatch))) continue;
-      // ¡Match! — usar esta regla
       return {
         to: rule.to.map((e) => e.trim()).filter(Boolean),
         cc: (rule.cc ?? []).map((e) => e.trim()).filter(Boolean),
       };
     }
-    // Ninguna regla coincidió con el módulo → log y fallback
     console.info(
-      `PQR routing: módulo "${pqr.module}" no tiene regla para tenant ${tenant}, usando fallback`
+      `PQR routing: módulo "${pqrModule}" sin regla exacta para tenant ${tenant.name ?? "—"}, usando fallback`
+    );
+  } else if (routing.length > 0 && !pqrModule) {
+    console.warn(
+      `PQR routing: tenant ${tenant.name ?? "—"} tiene reglas pero no se pudo inferir módulo (type=${pqr.type})`
     );
   }
 
-  // Fallback: lista global de correos del tenant
   const fallback = (tenant.pqrNotificationEmails ?? []).map((e) => e.trim()).filter(Boolean);
   if (fallback.length === 0) return null;
   return { to: fallback, cc: [] };
+}
+
+/** Agrega el email del cliente en CC si existe y no está ya en to/cc. */
+function withCustomerCc(
+  recipients: { to: string[]; cc: string[] },
+  customerEmail?: string | null
+): { to: string[]; cc: string[] } {
+  const email = customerEmail?.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return recipients;
+  }
+  const normalized = email.toLowerCase();
+  const already =
+    recipients.to.some((e) => e.toLowerCase() === normalized) ||
+    recipients.cc.some((e) => e.toLowerCase() === normalized);
+  if (already) return recipients;
+  return { ...recipients, cc: [...recipients.cc, email] };
 }
 
 // ─── Email action ────────────────────────────────────────────────────────────
@@ -170,34 +252,54 @@ const TYPE_LABELS: Record<string, string> = {
   compliment: "Felicitación",
 };
 
+type PqrEmailResult =
+  | { ok: true; to: string[]; cc: string[] }
+  | { ok: false; error: string };
+
 /** Envía por Brevo la notificación de PQR al correo que corresponde según el módulo */
 export const sendPqrNotificationEmail = internalAction({
-  args: { pqrId: v.id("pqrs") },
-  handler: async (ctx, args) => {
+  args: {
+    pqrId: v.id("pqrs"),
+    isResend: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<PqrEmailResult> => {
     const pqr = await ctx.runQuery(api.pqrs.get, { pqrId: args.pqrId });
-    if (!pqr) return;
+    if (!pqr) return { ok: false as const, error: "PQR no encontrada" };
     const tenant = await ctx.runQuery(api.tenants.get, { tenantId: pqr.tenantId });
-    if (!tenant) return;
+    if (!tenant) return { ok: false as const, error: "Restaurante no encontrado" };
 
-    const recipients = resolveRecipients(tenant, pqr);
-    if (!recipients || recipients.to.length === 0) {
-      console.info("PQR email: sin destinatarios configurados para tenant", tenant.name);
-      return;
+    const resolved = resolveRecipients(tenant, pqr);
+    if (!resolved || resolved.to.length === 0) {
+      console.warn(
+        "PQR email: sin destinatarios — tenant=%s routing=%s module=%s type=%s fallbackEmails=%s",
+        tenant.name,
+        (tenant.pqrEmailRouting ?? []).length,
+        pqr.module ?? resolvePqrModule(pqr) ?? "—",
+        pqr.type,
+        (tenant.pqrNotificationEmails ?? []).length
+      );
+      return {
+        ok: false as const,
+        error: "No hay destinatarios configurados para este PQR",
+      };
     }
+
+    const recipients = withCustomerCc(resolved, pqr.customerEmail);
 
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.BREVO_SENDER_EMAIL ?? "noreply@example.com";
     const senderName = process.env.BREVO_SENDER_NAME ?? tenant.name ?? "Sistema";
     if (!apiKey) {
       console.warn("BREVO_API_KEY no configurada, no se envía email de PQR");
-      return;
+      return { ok: false as const, error: "Servicio de email no configurado (BREVO_API_KEY)" };
     }
 
     const typeLabel = TYPE_LABELS[pqr.type] ?? pqr.type;
     const moduleLabel = pqr.module ? (MODULE_LABELS[pqr.module] ?? pqr.module) : null;
-    const emailSubject = moduleLabel
+    const subjectBase = moduleLabel
       ? `[${moduleLabel}] Nueva ${typeLabel} - ${pqr.subject}`
       : `[PQR] Nueva ${typeLabel} - ${pqr.subject}`;
+    const emailSubject = args.isResend ? `Reenvío: ${subjectBase}` : subjectBase;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -268,11 +370,31 @@ export const sendPqrNotificationEmail = internalAction({
     if (!res.ok) {
       const err = await res.text();
       console.error("Brevo PQR email error:", res.status, err);
-    } else {
-      console.info(
-        `PQR email enviado: ticket=${pqr.ticketNumber} módulo=${pqr.module ?? "—"} to=[${recipients.to.join(", ")}]${recipients.cc.length > 0 ? ` cc=[${recipients.cc.join(", ")}]` : ""}`
-      );
+      return {
+        ok: false as const,
+        error: `Error al enviar email (${res.status})`,
+      };
     }
+
+    console.info(
+      `PQR email enviado: ticket=${pqr.ticketNumber} módulo=${pqr.module ?? "—"} to=[${recipients.to.join(", ")}]${recipients.cc.length > 0 ? ` cc=[${recipients.cc.join(", ")}]` : ""}${args.isResend ? " (reenvío)" : ""}`
+    );
+    return {
+      ok: true as const,
+      to: recipients.to,
+      cc: recipients.cc,
+    };
+  },
+});
+
+/** Reenvía la notificación por email (desde el panel). */
+export const resendNotificationEmail = action({
+  args: { pqrId: v.id("pqrs") },
+  handler: async (ctx, args): Promise<PqrEmailResult> => {
+    return await ctx.runAction(internal.pqrs.sendPqrNotificationEmail, {
+      pqrId: args.pqrId,
+      isResend: true,
+    });
   },
 });
 
