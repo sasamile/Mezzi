@@ -5,8 +5,12 @@ const roleValidator = v.union(
   v.literal("OWNER"),
   v.literal("ADMIN"),
   v.literal("AGENT"),
-  v.literal("VIEWER")
+  v.literal("VIEWER"),
+  v.literal("HR")
 );
+
+/** Páginas por defecto para rol Talento Humano (solo vacantes). */
+export const HR_DEFAULT_ALLOWED_PAGES = ["trabajaConNosotros"] as const;
 
 /** Lista todos los usuarios (superadmin) - sin passwordHash */
 export const list = query({
@@ -114,11 +118,14 @@ export const inviteToTenant = mutation({
       .first();
     if (existing) throw new Error("El usuario ya tiene acceso a este restaurante");
     const now = Date.now();
+    const allowedPages =
+      args.allowedPages ??
+      (args.role === "HR" ? [...HR_DEFAULT_ALLOWED_PAGES] : undefined);
     return await ctx.db.insert("userTenants", {
       userId: args.userId,
       tenantId: args.tenantId,
       role: args.role,
-      allowedPages: args.allowedPages,
+      allowedPages,
       createdAt: now,
     });
   },
@@ -159,6 +166,11 @@ export const updateRole = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.userTenantId, { role: args.role });
+    if (args.role === "HR") {
+      await ctx.db.patch(args.userTenantId, {
+        allowedPages: [...HR_DEFAULT_ALLOWED_PAGES],
+      });
+    }
     return args.userTenantId;
   },
 });

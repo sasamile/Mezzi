@@ -7,7 +7,7 @@ import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
 import { sileo } from "sileo";
-import { Plus, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, Bot } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,7 +209,7 @@ export default function TrabajaConNosotrosPage() {
                 Trabaja con Nosotros
               </h1>
               <p className="mt-2 text-base text-slate-500 sm:text-lg">
-                Gestiona ubicaciones y vacantes.
+                Ciudades, sedes y vacantes que el bot usa en WhatsApp
               </p>
             </div>
             <Button
@@ -222,6 +222,15 @@ export default function TrabajaConNosotrosPage() {
             </Button>
           </div>
         </header>
+
+        <div className="mb-6 flex gap-3 rounded-xl border border-sky-200 bg-sky-50/90 p-4 text-sm text-sky-950">
+          <Bot className="size-5 shrink-0 mt-0.5 text-sky-700" strokeWidth={1.7} />
+          <p>
+            <strong>El asistente de WhatsApp lee esta información.</strong> Carga ciudades,
+            centros comerciales o sedes y marca las vacantes activas (parrillero, mesera, etc.).
+            Cuando alguien pregunte por trabajo, el bot responderá con lo que configures aquí.
+          </p>
+        </div>
 
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 mb-6">
           <div

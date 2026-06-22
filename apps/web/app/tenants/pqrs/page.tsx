@@ -6,7 +6,7 @@ import { useRequireModule } from "@/lib/use-require-module";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { Plus, Search, MessageSquare, AlertCircle, FileWarning, Lightbulb, Star, Mail, Loader2 } from "lucide-react";
+import { Plus, Search, MessageSquare, AlertCircle, FileWarning, Lightbulb, Star, Mail, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { sileo } from "sileo";
 
 const DEFAULT_PRIMARY = "#197fe6";
 
@@ -127,8 +128,15 @@ export default function PQRsPage() {
       });
       setCreateOpen(false);
       setForm({ type: "petition", anonymous: false, customerName: "", customerEmail: "", customerPhone: "", subject: "", description: "" });
+      sileo.success({
+        title: "PQR registrada",
+        description: "Se notificará por correo al área correspondiente.",
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al crear");
+      sileo.error({
+        title: "Error al crear",
+        description: err instanceof Error ? err.message : "No se pudo crear la PQR.",
+      });
     } finally {
       setSaving(false);
     }
@@ -140,8 +148,15 @@ export default function PQRsPage() {
       if (status === "resolved" || status === "closed") {
         setDetailId(null);
       }
+      sileo.success({
+        title: "Estado actualizado",
+        description: `PQR marcada como ${STATUS_LABELS[status].toLowerCase()}.`,
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al actualizar");
+      sileo.error({
+        title: "Error",
+        description: err instanceof Error ? err.message : "No se pudo actualizar.",
+      });
     }
   };
 
@@ -152,8 +167,15 @@ export default function PQRsPage() {
       await updatePqr({ pqrId: detailId, status: "resolved", resolutionNotes: resolutionNotes.trim() || undefined });
       setDetailId(null);
       setResolutionNotes("");
+      sileo.success({
+        title: "PQR resuelta",
+        description: "El caso quedó marcado como resuelto.",
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al resolver");
+      sileo.error({
+        title: "Error",
+        description: err instanceof Error ? err.message : "No se pudo resolver.",
+      });
     } finally {
       setSaving(false);
     }
@@ -179,12 +201,21 @@ export default function PQRsPage() {
       if (result.ok) {
         const ccNote =
           result.cc.length > 0 ? ` (con copia a ${result.cc.join(", ")})` : "";
-        setResendMessage(`Correo reenviado a ${result.to.join(", ")}${ccNote}`);
+        const msg = `Correo reenviado a ${result.to.join(", ")}${ccNote}`;
+        setResendMessage(msg);
+        sileo.success({
+          title: "Correo reenviado",
+          description: msg,
+        });
       } else {
-        setResendMessage(result.error ?? "No se pudo reenviar el correo");
+        const errMsg = result.error ?? "No se pudo reenviar el correo";
+        setResendMessage(errMsg);
+        sileo.error({ title: "Error al reenviar", description: errMsg });
       }
     } catch (err) {
-      setResendMessage(err instanceof Error ? err.message : "Error al reenviar");
+      const errMsg = err instanceof Error ? err.message : "Error al reenviar";
+      setResendMessage(errMsg);
+      sileo.error({ title: "Error al reenviar", description: errMsg });
     } finally {
       setResending(false);
     }

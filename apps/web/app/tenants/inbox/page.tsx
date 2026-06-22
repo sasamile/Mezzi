@@ -33,6 +33,34 @@ import { ImageViewerModal, type ChatImageItem } from "@/components/inbox/image-v
 import { ImagePreviewModal } from "@/components/inbox/image-preview-modal";
 import { DocumentPreviewModal } from "@/components/inbox/document-preview-modal";
 import { CustomAudioPlayer } from "@/components/inbox/custom-audio-player";
+import { sileo } from "sileo";
+
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+async function uploadToConvexStorage(
+  generateUploadUrl: () => Promise<string>,
+  file: File
+): Promise<Id<"_storage">> {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("El archivo supera el límite de 15 MB para WhatsApp.");
+  }
+  const uploadUrl = await generateUploadUrl();
+  const res = await fetch(uploadUrl, {
+    method: "POST",
+    headers: file.type ? { "Content-Type": file.type } : undefined,
+    body: file,
+  });
+  if (!res.ok) {
+    throw new Error(
+      `No se pudo subir el archivo (${res.status}). Prueba con un PDF más liviano o en otro formato.`
+    );
+  }
+  const data = (await res.json()) as { storageId?: string };
+  if (!data.storageId) {
+    throw new Error("Error al subir el archivo. Vuelve a intentarlo.");
+  }
+  return data.storageId as Id<"_storage">;
+}
 import { IntegrationBlockedBanner } from "@/components/integrations/integration-blocked-banner";
 import { cn } from "@/lib/utils";
 
@@ -429,23 +457,19 @@ export default function InboxPage() {
       if (wasBot && userIdToAssign) {
         await updateAssignedTo({ conversationId: selectedConversationId, userId: userIdToAssign });
       }
+      const attachmentCount = pendingAttachments.length;
       if (hasAttachments) {
         for (let i = 0; i < pendingAttachments.length; i++) {
           const att = pendingAttachments[i];
-          const uploadUrl = await generateUploadUrl();
-          const res = await fetch(uploadUrl, {
-            method: "POST",
-            headers: att.file.type ? { "Content-Type": att.file.type } : undefined,
-            body: att.file,
-          });
-          const { storageId } = (await res.json()) as { storageId: string };
+          const storageId = await uploadToConvexStorage(generateUploadUrl, att.file);
           await sendMedia({
             tenantId,
             conversationId: selectedConversationId,
-            storageId: storageId as Id<"_storage">,
+            storageId,
             mediaType: att.type,
             caption: i === 0 && text ? text : undefined,
             contentType: att.file.type || undefined,
+            fileName: att.type === "document" ? att.file.name : undefined,
           });
           if (att.preview) URL.revokeObjectURL(att.preview);
         }
@@ -460,8 +484,26 @@ export default function InboxPage() {
         });
       }
       setReplyText("");
+      if (hasAttachments && text) {
+        sileo.success({
+          title: "Enviado por WhatsApp",
+          description: `Mensaje y ${attachmentCount} archivo(s) enviados correctamente.`,
+        });
+      } else if (hasAttachments) {
+        sileo.success({
+          title: "Archivo(s) enviado(s)",
+          description: `${attachmentCount} archivo(s) enviados por WhatsApp.`,
+        });
+      } else {
+        sileo.success({
+          title: "Mensaje enviado",
+          description: "El mensaje se entregó por WhatsApp.",
+        });
+      }
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : "Error al enviar");
+      const msg = e instanceof Error ? e.message : "Error al enviar";
+      setSendError(msg);
+      sileo.error({ title: "No se pudo enviar", description: msg });
     } finally {
       setSending(false);
     }
@@ -556,25 +598,25 @@ export default function InboxPage() {
       }
       for (let i = 0; i < items.length; i++) {
         const { file, caption } = items[i]!;
-        const uploadUrl = await generateUploadUrl();
-        const res = await fetch(uploadUrl, {
-          method: "POST",
-          headers: file.type ? { "Content-Type": file.type } : undefined,
-          body: file,
-        });
-        const { storageId } = (await res.json()) as { storageId: string };
+        const storageId = await uploadToConvexStorage(generateUploadUrl, file);
         await sendMedia({
           tenantId,
           conversationId: selectedConversationId,
-          storageId: storageId as Id<"_storage">,
+          storageId,
           mediaType: "image",
           caption: caption || undefined,
           contentType: file.type || undefined,
         });
       }
       setSelectedImages([]);
+      sileo.success({
+        title: "Imagen(es) enviada(s)",
+        description: `${items.length} imagen(es) enviadas por WhatsApp.`,
+      });
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : "Error al enviar");
+      const msg = e instanceof Error ? e.message : "Error al enviar";
+      setSendError(msg);
+      sileo.error({ title: "No se pudo enviar", description: msg });
     } finally {
       setSending(false);
     }
@@ -593,25 +635,26 @@ export default function InboxPage() {
       }
       for (let i = 0; i < items.length; i++) {
         const { file, caption } = items[i]!;
-        const uploadUrl = await generateUploadUrl();
-        const res = await fetch(uploadUrl, {
-          method: "POST",
-          headers: file.type ? { "Content-Type": file.type } : undefined,
-          body: file,
-        });
-        const { storageId } = (await res.json()) as { storageId: string };
+        const storageId = await uploadToConvexStorage(generateUploadUrl, file);
         await sendMedia({
           tenantId,
           conversationId: selectedConversationId,
-          storageId: storageId as Id<"_storage">,
+          storageId,
           mediaType: "document",
           caption: caption || undefined,
           contentType: file.type || undefined,
+          fileName: file.name,
         });
       }
       setSelectedDocuments([]);
+      sileo.success({
+        title: "Documento(s) enviado(s)",
+        description: `${items.length} documento(s) enviados por WhatsApp.`,
+      });
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : "Error al enviar");
+      const msg = e instanceof Error ? e.message : "Error al enviar";
+      setSendError(msg);
+      sileo.error({ title: "No se pudo enviar", description: msg });
     } finally {
       setSending(false);
     }

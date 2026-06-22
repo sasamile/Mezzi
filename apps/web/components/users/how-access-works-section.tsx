@@ -3,22 +3,24 @@
 import * as React from "react";
 import { UserPlus, Shield, Zap, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TENANT_ROLE_DEFINITIONS } from "@/lib/tenant-role-defaults";
+import { ROL_LABELS } from "@/constants";
 
 const STEPS = [
   {
     icon: UserPlus,
     title: "Invitas un usuario",
-    description: "Añades una persona por email o nombre al restaurante.",
+    description: "Añades una persona por email al restaurante.",
   },
   {
     icon: Shield,
     title: "Le asignas un rol",
-    description: "Owner, Admin, Operador o Solo lectura según el nivel de acceso.",
+    description: "Administrador, operador, solo lectura o talento humano.",
   },
   {
     icon: Zap,
     title: "El sistema controla su acceso",
-    description: "El acceso se aplica automáticamente según el rol asignado.",
+    description: "Solo ve los módulos permitidos para su rol.",
   },
 ] as const;
 
@@ -40,7 +42,7 @@ export function HowAccessWorksSection({ primaryColor }: { primaryColor: string }
         )}
       </button>
       {open && (
-        <div className="border-t border-slate-100 px-5 py-4 animate-in slide-in-from-top-2 duration-200">
+        <div className="border-t border-slate-100 px-5 py-4 animate-in slide-in-from-top-2 duration-200 space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
             {STEPS.map((step, i) => {
               const Icon = step.icon;
@@ -71,6 +73,23 @@ export function HowAccessWorksSection({ primaryColor }: { primaryColor: string }
                 </div>
               );
             })}
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">Tipos de usuario</h3>
+            <ul className="space-y-2">
+              {TENANT_ROLE_DEFINITIONS.map((def) => (
+                <li
+                  key={def.role}
+                  className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 text-sm"
+                >
+                  <span className="font-semibold text-slate-800">
+                    {ROL_LABELS[def.role] ?? def.label}
+                  </span>
+                  <span className="text-slate-500"> — {def.summary}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

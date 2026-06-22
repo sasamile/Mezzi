@@ -195,7 +195,7 @@ function buildTurnOutputContract(refinement: boolean): string {
 Kinds válidos de side_effect:
   "create_reservation"     — crear reserva (args: customerName?, date YYYY-MM-DD, time 24h, numberOfPeople|partySize, customerPhone?, tableNumber?, notes?)
   "send_document_pdf"      — enviar PDF (args: label = label exacto de "pdfs")
-  "escalate_to_human"      — pasar a agente humano (args: {})
+  "escalate_to_human"      — pasar a agente humano (args: {}). NO usar si modules indica soporte solo por correo.
   "mark_resolved"          — cerrar conversación (args: {})
   "search_job_vacancies"   — buscar vacantes (args: city? o cityFilter?)
   "search_products"        — buscar productos URBRANDS en WooCommerce. Args: search (texto libre) O por separado marca (ej "LV"), categoria (ej "sandalias"), talla (ej "39"). IMPORTANTE: siempre emitir este side_effect antes de decir que NO hay stock.

@@ -106,7 +106,7 @@ export default function UsersPage() {
 
   const handleSaveRole = async (
     userTenantId: Id<"userTenants">,
-    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER",
+    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER" | "HR",
     allowedPages: string[]
   ) => {
     try {
@@ -234,9 +234,17 @@ export default function UsersPage() {
               className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
               <option value="all">Todos los roles</option>
-              {["OWNER", "ADMIN", "AGENT", "VIEWER"].map((r) => (
+              {["OWNER", "ADMIN", "AGENT", "VIEWER", "HR"].map((r) => (
                 <option key={r} value={r}>
-                  {r === "OWNER" ? "Owner" : r === "ADMIN" ? "Admin" : r === "AGENT" ? "Operador" : "Solo lectura"}
+                  {r === "OWNER"
+                    ? "Owner"
+                    : r === "ADMIN"
+                      ? "Admin"
+                      : r === "AGENT"
+                        ? "Operador"
+                        : r === "HR"
+                          ? "Talento Humano"
+                          : "Solo lectura"}
                 </option>
               ))}
             </select>

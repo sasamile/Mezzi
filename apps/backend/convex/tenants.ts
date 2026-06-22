@@ -118,6 +118,16 @@ export const update = mutation({
     phone: v.optional(v.string()),
     customDomain: v.optional(v.string()),
     pqrNotificationEmails: v.optional(v.array(v.string())),
+    pqrEmailRouting: v.optional(
+      v.array(
+        v.object({
+          module: v.string(),
+          cityMatch: v.optional(v.string()),
+          to: v.array(v.string()),
+          cc: v.optional(v.array(v.string())),
+        })
+      )
+    ),
     enabledModules: enabledModulesValidator,
   },
   handler: async (ctx, args) => {

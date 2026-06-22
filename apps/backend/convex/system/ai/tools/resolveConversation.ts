@@ -1,7 +1,11 @@
 import { jsonSchema } from "ai";
 import { createTool } from "@convex-dev/agent";
-import { internal } from "../../../_generated/api";
+import { api, internal } from "../../../_generated/api";
 import { supportAgent } from "../agents/supportAgent";
+import {
+  isEmailOnlySupportTenant,
+  PQR_REGISTERED_ACK_MESSAGE,
+} from "../../alcarbon";
 
 export const escalateConversation = createTool({
   description: "Conectar al cliente con un agente humano del restaurante",
@@ -13,6 +17,23 @@ export const escalateConversation = createTool({
   handler: async (ctx) => {
     if (!ctx.threadId) {
       return "Falta el ID del hilo";
+    }
+
+    const conversation = await ctx.runQuery(
+      internal.system.conversations.getByThreadId,
+      { threadId: ctx.threadId }
+    );
+    if (conversation) {
+      const tenant = await ctx.runQuery(api.tenants.get, {
+        tenantId: conversation.tenantId,
+      });
+      if (isEmailOnlySupportTenant(tenant)) {
+        return (
+          "NO uses escalamiento en vivo para este restaurante. " +
+          "Registra la PQR con createPQRTool si aún no está registrada. " +
+          `Mensaje al cliente: "${PQR_REGISTERED_ACK_MESSAGE}"`
+        );
+      }
     }
 
     await ctx.runMutation(internal.system.conversations.escalate, {

@@ -83,7 +83,8 @@ export default defineSchema({
       v.literal("OWNER"),
       v.literal("ADMIN"),
       v.literal("AGENT"),
-      v.literal("VIEWER")
+      v.literal("VIEWER"),
+      v.literal("HR")
     ),
     /** Páginas que puede ver. undefined = todas según rol. [] = ninguna. */
     allowedPages: v.optional(v.array(v.string())),
@@ -185,7 +186,8 @@ export default defineSchema({
       v.literal("OWNER"),
       v.literal("ADMIN"),
       v.literal("AGENT"),
-      v.literal("VIEWER")
+      v.literal("VIEWER"),
+      v.literal("HR")
     ),
     module: v.string(),
     allowed: v.boolean(),

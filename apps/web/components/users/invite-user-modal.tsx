@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PERMISSION_PAGES, getVisiblePermissionPages } from "@/lib/permissions-pages";
+import { defaultPagesForRole } from "@/lib/tenant-role-defaults";
 import { cn } from "@/lib/utils";
 
 const ROLE_OPTIONS = [
@@ -17,6 +18,7 @@ const ROLE_OPTIONS = [
   { value: "ADMIN" as const, label: "Admin", description: "Acceso total" },
   { value: "AGENT" as const, label: "Operador", description: "Inbox y pedidos" },
   { value: "VIEWER" as const, label: "Solo lectura", description: "Solo visualización" },
+  { value: "HR" as const, label: "Talento Humano", description: "Solo módulo Trabaja con Nosotros" },
 ] as const;
 
 type Role = (typeof ROLE_OPTIONS)[number]["value"];
@@ -151,7 +153,15 @@ export function InviteUserModal({
             </label>
             <select
               value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
+              onChange={(e) => {
+                const role = e.target.value as Role;
+                const pageKeys = visiblePages.map((p) => p.key);
+                setForm((f) => ({
+                  ...f,
+                  role,
+                  allowedPages: defaultPagesForRole(role, pageKeys),
+                }));
+              }}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
               {ROLE_OPTIONS.map((r) => (
@@ -165,6 +175,12 @@ export function InviteUserModal({
             <p className="mb-2 text-sm font-medium text-slate-700">
               Páginas que puede ver
             </p>
+            {form.role === "HR" ? (
+              <p className="text-sm text-slate-600 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                Solo <strong>Trabaja con Nosotros</strong> (configuración automática para Talento Humano).
+              </p>
+            ) : (
+            <>
             <p className="mb-3 text-xs text-slate-500">
               Selecciona qué secciones del restaurante puede ver esta persona
             </p>
@@ -195,6 +211,8 @@ export function InviteUserModal({
                 </label>
               ))}
             </div>
+            </>
+            )}
           </div>
         </div>
 

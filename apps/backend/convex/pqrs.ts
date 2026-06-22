@@ -30,6 +30,34 @@ export const get = query({
   handler: async (ctx, args) => ctx.db.get(args.pqrId),
 });
 
+/** PQR abierta más reciente del cliente (por teléfono), para mensajes de insistencia. */
+export const getRecentOpenByPhone = query({
+  args: {
+    tenantId: v.id("tenants"),
+    customerPhone: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const digits = args.customerPhone.replace(/\D/g, "").slice(-10);
+    if (digits.length < 7) return null;
+
+    const rows = await ctx.db
+      .query("pqrs")
+      .withIndex("by_tenant_created", (q) => q.eq("tenantId", args.tenantId))
+      .order("desc")
+      .take(80);
+
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    return (
+      rows.find((p) => {
+        if (p.createdAt < cutoff) return false;
+        if (p.status !== "open" && p.status !== "in_progress") return false;
+        const phone = p.customerPhone?.replace(/\D/g, "").slice(-10);
+        return phone === digits;
+      }) ?? null
+    );
+  },
+});
+
 export const create = mutation({
   args: {
     tenantId: v.id("tenants"),

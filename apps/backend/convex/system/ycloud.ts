@@ -11,7 +11,7 @@ import { supportAgent } from "./ai/agents/supportAgent";
 import { urbrandsAgent } from "./ai/agents/urbrandsAgent";
 import { searchProducts } from "./ai/tools/searchProducts";
 import { isUrbrandsTenant } from "./urbrands";
-import { isPdfsModuleEnabled } from "./alcarbon";
+import { isPdfsModuleEnabled, isEmailOnlySupportTenant, emailOnlySupportPromptBlock, looksLikePqrFollowUp, pqrAlreadyRegisteredMessage, normalizePhoneForPqr } from "./alcarbon";
 import { transcribeAudioFromUrl } from "./ai/transcribe";
 import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
@@ -354,12 +354,34 @@ export const processInboundMessageBatched = internalAction({
         tenantId: args.tenantId,
       });
       const isUrbrands = isUrbrandsTenant(tenant);
+      const emailOnlySupport = isEmailOnlySupportTenant(tenant);
       const modules = tenant?.enabledModules ?? {};
       const hasReservas = modules.reservas !== false;
       const hasPedidos = modules.pedidos !== false;
       const hasPqr = modules.pqr !== false;
       const hasTrabajaConNosotros = modules.trabajaConNosotros !== false;
       const hasPdfs = isPdfsModuleEnabled(tenant);
+
+      if (
+        emailOnlySupport &&
+        hasPqr &&
+        args.channel === "whatsapp"
+      ) {
+        const recentPqr = await ctx.runQuery(api.pqrs.getRecentOpenByPhone, {
+          tenantId: args.tenantId,
+          customerPhone: normalizePhoneForPqr(args.contactId),
+        });
+        if (recentPqr && looksLikePqrFollowUp(clientText)) {
+          await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            tenantId: args.tenantId,
+            conversationId: args.conversationId,
+            content: pqrAlreadyRegisteredMessage(
+              recentPqr.ticketNumber ?? "—"
+            ),
+          });
+          return;
+        }
+      }
 
       const enabledList: string[] = [];
       if (hasReservas) enabledList.push("reservas");
@@ -371,7 +393,7 @@ export const processInboundMessageBatched = internalAction({
         isUrbrands
           ? ""
           : enabledList.length > 0
-          ? `[MÓDULOS HABILITADOS - OBLIGATORIO]
+          ? `${emailOnlySupport ? emailOnlySupportPromptBlock() : ""}[MÓDULOS HABILITADOS - OBLIGATORIO]
 Este restaurante tiene habilitados estos módulos transaccionales: ${enabledList.join(", ")}. También puedes buscar en la base de conocimiento (menú, horarios, sedes, etc.).
 NO uses herramientas de módulos que no estén habilitados (ej. no uses createOrderTool si pedidos no está habilitado). Sin embargo, SIEMPRE sigue las instrucciones del prompt del restaurante para flujos informativos (domicilios, preguntas frecuentes, etc.) aunque no sean un módulo habilitado.
 ${!hasReservas ? `- Si el cliente pide RESERVA y reservas NO está habilitado → responde: "Lo sentimos, este restaurante no ofrece reservas por WhatsApp. Te recomendamos contactar directamente al restaurante."` : "- Si el cliente quiere hacer una RESERVA y reservas está habilitado, puedes crearla usando createReservationTool cuando tengas los datos completos."}
@@ -678,6 +700,8 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         );
         const modulesLine = isUrbrands
           ? "URBRANDS: tienda ropa/accesorios. Catálogo WooCommerce (search_products), entrega inmediata Villavicencio, por encargo EE.UU./Europa."
+          : emailOnlySupport
+          ? `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. SOPORTE POR CORREO — sin transferencia a humano en vivo. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`
           : `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`;
 
         const pdfsLine =
@@ -881,16 +905,24 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
             searchProductsTool: searchProducts,
             ...(hasPdfs ? { sendPdfTool: sendPdf } : {}),
             updateCustomerInfoTool: updateCustomerInfo,
-            escalateConversationTool: escalateConversation,
-            setPriorityTool: setPriority,
+            ...(emailOnlySupport
+              ? {}
+              : {
+                  escalateConversationTool: escalateConversation,
+                  setPriorityTool: setPriority,
+                }),
             resolveConversationTool: resolveConversation,
           }
         : {
             searchTool: search,
             ...(hasPdfs ? { sendPdfTool: sendPdf } : {}),
             updateCustomerInfoTool: updateCustomerInfo,
-            escalateConversationTool: escalateConversation,
-            setPriorityTool: setPriority,
+            ...(emailOnlySupport
+              ? {}
+              : {
+                  escalateConversationTool: escalateConversation,
+                  setPriorityTool: setPriority,
+                }),
             resolveConversationTool: resolveConversation,
           };
       if (!isUrbrands && hasReservas) {

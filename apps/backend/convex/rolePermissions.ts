@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-const ROLES = ["OWNER", "ADMIN", "AGENT", "VIEWER"] as const;
+const ROLES = ["OWNER", "ADMIN", "AGENT", "VIEWER", "HR"] as const;
 const MODULES = [
   "Restaurantes",
   "Planes",
@@ -17,7 +17,8 @@ const roleValidator = v.union(
   v.literal("OWNER"),
   v.literal("ADMIN"),
   v.literal("AGENT"),
-  v.literal("VIEWER")
+  v.literal("VIEWER"),
+  v.literal("HR")
 );
 
 /** Obtener todos los permisos por rol (como mapa) */
@@ -101,6 +102,16 @@ export const seedDefaults = mutation({
         Conocimiento: true,
         Prompts: true,
         YCloud: true,
+        Usuarios: false,
+      },
+      HR: {
+        Restaurantes: false,
+        Planes: false,
+        Administradores: false,
+        Inbox: false,
+        Conocimiento: false,
+        Prompts: false,
+        YCloud: false,
         Usuarios: false,
       },
     };

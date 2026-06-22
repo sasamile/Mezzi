@@ -5,9 +5,12 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { Settings } from "lucide-react";
+import { Settings, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
+import { PqrEmailRoutingSection } from "@/components/tenants/PqrEmailRoutingSection";
+import type { PqrRoutingRule } from "@/lib/pqr-routing";
+import { sileo } from "sileo";
 
 const DEFAULT_PRIMARY = "#197fe6";
 const DEFAULT_SECONDARY = "#06b6d4";
@@ -15,6 +18,7 @@ const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/sv
 
 export default function AjustesPage() {
   const { tenantId } = useTenant();
+  const [tab, setTab] = React.useState<"general" | "correos">("general");
   const [form, setForm] = React.useState({
     name: "",
     logoUrl: "",
@@ -57,6 +61,14 @@ export default function AjustesPage() {
   }, [tenant]);
 
   const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const pqrEnabled = tenant?.enabledModules?.pqr !== false;
+  const pqrRouting = (tenant as { pqrEmailRouting?: PqrRoutingRule[] } | undefined)
+    ?.pqrEmailRouting;
+
+  const handleSaveRouting = async (routing: PqrRoutingRule[]) => {
+    if (!tenantId) return;
+    await updateTenant({ tenantId, pqrEmailRouting: routing });
+  };
   const rawDisplayLogoUrl =
     form.logoStorageId ? (uploadPreviewUrl ?? null) : form.logoUrl || (tenant?.logoUrl ?? "");
   const displayLogoUrl = rawDisplayLogoUrl
@@ -119,9 +131,16 @@ export default function AjustesPage() {
       });
       setForm((f) => ({ ...f, logoStorageId: null }));
       setSaved(true);
+      sileo.success({
+        title: "Ajustes guardados",
+        description: "La información del restaurante se actualizó correctamente.",
+      });
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al guardar");
+      sileo.error({
+        title: "Error al guardar",
+        description: err instanceof Error ? err.message : "No se pudo guardar.",
+      });
     } finally {
       setSaving(false);
     }
@@ -147,10 +166,52 @@ export default function AjustesPage() {
             Ajustes
           </h1>
           <p className="mt-2 text-base text-slate-500 sm:text-lg">
-            Logo, información y colores del restaurante
+            Logo, información, colores y correos de PQR
           </p>
         </header>
 
+        <div className="mb-6 flex gap-2 border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setTab("general")}
+            className={cn(
+              "flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px",
+              tab === "general"
+                ? "border-current text-slate-900"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            )}
+            style={tab === "general" ? { borderColor: primaryColor, color: primaryColor } : undefined}
+          >
+            <Settings className="size-4" />
+            General
+          </button>
+          {pqrEnabled && (
+            <button
+              type="button"
+              onClick={() => setTab("correos")}
+              className={cn(
+                "flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px",
+                tab === "correos"
+                  ? "border-current text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+              style={tab === "correos" ? { borderColor: primaryColor, color: primaryColor } : undefined}
+            >
+              <Mail className="size-4" />
+              Correos PQR
+            </button>
+          )}
+        </div>
+
+        {tab === "correos" && pqrEnabled ? (
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
+            <PqrEmailRoutingSection
+              primaryColor={primaryColor}
+              initialRouting={pqrRouting}
+              onSave={handleSaveRouting}
+            />
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Nombre del restaurante *</label>
@@ -318,6 +379,7 @@ export default function AjustesPage() {
             )}
           </div>
         </form>
+        )}
       </div>
     </div>
   );

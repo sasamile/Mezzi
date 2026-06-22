@@ -28,4 +28,5 @@ export const ROL_LABELS: Record<string, string> = {
   ADMIN: "Admin",
   AGENT: "Editor",
   VIEWER: "Viewer",
+  HR: "Talento Humano",
 };

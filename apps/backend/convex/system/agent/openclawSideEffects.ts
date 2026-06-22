@@ -2,6 +2,10 @@ import { api, internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { ActionCtx } from "../../_generated/server";
 import { supportAgent } from "../ai/agents/supportAgent";
+import {
+  isEmailOnlySupportTenant,
+  PQR_REGISTERED_ACK_MESSAGE,
+} from "../alcarbon";
 
 export type OpenClawSideEffect = {
   kind: string;
@@ -53,6 +57,15 @@ export async function applyOpenClawSideEffect(
   try {
     switch (effect.kind) {
       case "escalate_to_human": {
+        const tenant = await ctx.runQuery(api.tenants.get, { tenantId });
+        if (isEmailOnlySupportTenant(tenant)) {
+          await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            tenantId,
+            conversationId,
+            content: PQR_REGISTERED_ACK_MESSAGE,
+          });
+          return { ok: true, toolSentWhatsApp: true };
+        }
         await ctx.runMutation(internal.system.conversations.escalate, {
           threadId,
         });

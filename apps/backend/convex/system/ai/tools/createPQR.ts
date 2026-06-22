@@ -2,6 +2,10 @@ import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { api, internal } from "../../../_generated/api";
 import { Id } from "../../../_generated/dataModel";
+import {
+  isEmailOnlySupportTenant,
+  PQR_REGISTERED_ACK_MESSAGE,
+} from "../../alcarbon";
 
 /**
  * Registra una PQR (Petición, Queja, Reclamo, Sugerencia o Felicitación) desde el chat.
@@ -114,7 +118,10 @@ export const createPQR = createTool({
       compliment: "Felicitación",
     };
     const typeLabel: string = TYPE_LABELS[args.type] ?? args.type;
-    const msg: string = `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\nEl equipo del restaurante revisará tu caso y se contactará contigo si es necesario.\n\nGracias por tu mensaje. 🙏`;
+    const emailOnly = isEmailOnlySupportTenant(tenant);
+    const msg: string = emailOnly
+      ? `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\n${PQR_REGISTERED_ACK_MESSAGE}`
+      : `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\nEl equipo del restaurante revisará tu caso y se contactará contigo si es necesario.\n\nGracias por tu mensaje. 🙏`;
 
     try {
       await ctx.runAction(api.ycloud.sendWhatsAppMessage, {

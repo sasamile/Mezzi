@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PERMISSION_PAGES, getVisiblePermissionPages } from "@/lib/permissions-pages";
+import { defaultPagesForRole } from "@/lib/tenant-role-defaults";
 import type { Id } from "@/convex";
 
 const ROLE_OPTIONS = [
@@ -34,6 +35,11 @@ const ROLE_OPTIONS = [
     label: "Solo lectura",
     description: "Puede ver contenido pero no editar ni gestionar usuarios.",
   },
+  {
+    value: "HR" as const,
+    label: "Talento Humano",
+    description: "Solo acceso al módulo Trabaja con Nosotros (vacantes y ubicaciones).",
+  },
 ] as const;
 
 interface ChangeRoleModalProps {
@@ -54,7 +60,7 @@ interface ChangeRoleModalProps {
   primaryColor: string;
   onSave: (
     userTenantId: Id<"userTenants">,
-    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER",
+    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER" | "HR",
     allowedPages: string[]
   ) => Promise<void>;
 }
@@ -109,7 +115,7 @@ export function ChangeRoleModal({
     try {
       await onSave(
         userTenantId,
-        selectedRole as "OWNER" | "ADMIN" | "AGENT" | "VIEWER",
+        selectedRole as "OWNER" | "ADMIN" | "AGENT" | "VIEWER" | "HR",
         allowedPages
       );
       setSuccess(true);
@@ -137,7 +143,11 @@ export function ChangeRoleModal({
             <button
               key={role.value}
               type="button"
-              onClick={() => setSelectedRole(role.value)}
+              onClick={() => {
+                setSelectedRole(role.value);
+                const pageKeys = visiblePages.map((p) => p.key);
+                setAllowedPages(defaultPagesForRole(role.value, pageKeys));
+              }}
               className={cn(
                 "w-full rounded-xl border p-4 text-left transition-all duration-200",
                 selectedRole === role.value
@@ -187,6 +197,12 @@ export function ChangeRoleModal({
           <p className="text-sm font-medium text-slate-700">
             Páginas que puede ver
           </p>
+          {selectedRole === "HR" ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Talento humano solo accede a <strong>Trabaja con Nosotros</strong>.
+            </p>
+          ) : (
+            <>
           <p className="text-xs text-slate-500">
             Selecciona qué secciones del restaurante puede ver esta persona
           </p>
@@ -216,6 +232,8 @@ export function ChangeRoleModal({
               </label>
             ))}
           </div>
+            </>
+          )}
           </div>
         </div>
 
