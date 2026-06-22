@@ -76,7 +76,10 @@ function ruleMatchesRow(
   row: (typeof PQR_ROUTING_ROWS)[number]
 ): boolean {
   if (rule.module !== row.module) return false;
-  const rowCity = row.cityMatch?.toLowerCase();
+  const rowCity =
+    "cityMatch" in row && row.cityMatch
+      ? row.cityMatch.toLowerCase()
+      : undefined;
   const ruleCity = rule.cityMatch?.toLowerCase();
   if (rowCity) return ruleCity === rowCity;
   return !rule.cityMatch;
@@ -92,7 +95,7 @@ export function routingFromTenant(
       rowKey: row.rowKey,
       module: row.module,
       label: row.label,
-      cityMatch: row.cityMatch,
+      cityMatch: "cityMatch" in row ? row.cityMatch : undefined,
       to: emailsToField(match?.to),
       cc: emailsToField(match?.cc),
     };
