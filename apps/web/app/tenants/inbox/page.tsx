@@ -20,6 +20,7 @@ import {
   Flag,
   UserRound,
   CornerUpLeft,
+  RotateCw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -101,6 +102,7 @@ export default function InboxPage() {
   >(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [retryingBot, setRetryingBot] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -159,6 +161,7 @@ export default function InboxPage() {
   );
   const sendMessage = useAction(api.ycloud.sendWhatsAppMessage);
   const sendMedia = useAction(api.ycloud.sendWhatsAppMedia);
+  const retryBotResponse = useAction(api.ycloud.retryBotResponse);
   const improveMessage = useAction(api.improveMessage.improve);
   const generateUploadUrl = useMutation(api.ycloud.generateMediaUploadUrl);
   const updatePriority = useMutation(api.conversations.updatePriority);
@@ -522,6 +525,26 @@ export default function InboxPage() {
     });
     if (userId === null) {
       await updateStatus({ conversationId: selectedConversationId, status: "open" });
+    }
+  };
+
+  const handleRetryBot = async () => {
+    if (!tenantId || !selectedConversationId) return;
+    setRetryingBot(true);
+    try {
+      await retryBotResponse({
+        tenantId,
+        conversationId: selectedConversationId,
+      });
+      sileo.success({
+        title: "Bot reprocesó la conversación",
+        description: "Se envió una nueva respuesta al cliente por WhatsApp.",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo reintentar";
+      sileo.error({ title: "Error al reintentar", description: msg });
+    } finally {
+      setRetryingBot(false);
     }
   };
 
@@ -1009,6 +1032,25 @@ export default function InboxPage() {
                       ? "Bot activo"
                       : "Agente"}
                 </button>
+
+                {isBotMode(activeConversation) &&
+                  activeConversation.status !== "closed" &&
+                  activeConversation.channel === "whatsapp" && (
+                    <button
+                      type="button"
+                      onClick={handleRetryBot}
+                      disabled={retryingBot}
+                      title="Reprocesar el último mensaje del cliente con el bot"
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50"
+                    >
+                      <RotateCw
+                        size={13}
+                        strokeWidth={2}
+                        className={cn(retryingBot && "animate-spin")}
+                      />
+                      {retryingBot ? "Reprocesando…" : "Reintentar bot"}
+                    </button>
+                  )}
 
                 {/* Resolver */}
                 {activeConversation.status !== "closed" ? (

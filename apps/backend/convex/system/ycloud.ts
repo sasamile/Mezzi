@@ -239,6 +239,7 @@ export const processInboundMessageBatched = internalAction({
     contactId: v.string(),
     customerName: v.string(),
     channel: CHANNEL_VALIDATOR,
+    manualRetry: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<void> => {
     try {
@@ -256,27 +257,49 @@ export const processInboundMessageBatched = internalAction({
       if (conversation.assignedTo) return; // Humano tomó el control
       if (conversation.status === "pending" || conversation.status === "closed") return;
 
-      // Recolectar todos los mensajes INBOUND desde el último OUTBOUND
-      const pendingMsgs = await ctx.runQuery(
-        internal.messages.getInboundSinceLastOutbound,
-        { conversationId: args.conversationId }
-      );
-
-      if (!pendingMsgs.length) {
-        console.log("YCloud Batched: sin mensajes pendientes para procesar");
-        return;
-      }
-
-      // Obtener último mensaje del bot (para resolver respuestas numéricas)
+      let pendingMsgs: Array<{
+        content: string;
+        mediaUrl?: string;
+        mediaType?: string;
+      }> = [];
       let lastAssistantText = "";
-      try {
-        const lastOutbound = await ctx.runQuery(
-          internal.messages.getLastOutboundMessage,
+
+      if (args.manualRetry) {
+        const retryCtx = await ctx.runQuery(internal.messages.getRetryContext, {
+          conversationId: args.conversationId,
+        });
+        pendingMsgs = retryCtx.inbound;
+        lastAssistantText = retryCtx.lastAssistantText ?? "";
+        if (!pendingMsgs.length) {
+          console.log("YCloud Retry: sin turno del cliente para reprocesar");
+          return;
+        }
+        console.log("YCloud Retry: reprocesando turno del cliente", {
+          mensajes: pendingMsgs.length,
+          conversationId: args.conversationId,
+        });
+      } else {
+        // Recolectar todos los mensajes INBOUND desde el último OUTBOUND
+        pendingMsgs = await ctx.runQuery(
+          internal.messages.getInboundSinceLastOutbound,
           { conversationId: args.conversationId }
         );
-        if (lastOutbound) lastAssistantText = lastOutbound;
-      } catch {
-        // continúa sin contexto adicional
+
+        if (!pendingMsgs.length) {
+          console.log("YCloud Batched: sin mensajes pendientes para procesar");
+          return;
+        }
+
+        // Obtener último mensaje del bot (para resolver respuestas numéricas)
+        try {
+          const lastOutbound = await ctx.runQuery(
+            internal.messages.getLastOutboundMessage,
+            { conversationId: args.conversationId }
+          );
+          if (lastOutbound) lastAssistantText = lastOutbound;
+        } catch {
+          // continúa sin contexto adicional
+        }
       }
 
       // Resolver respuestas numéricas (ej: "2" → "2 (Anónimo)")

@@ -232,3 +232,55 @@ export const sendWhatsAppMedia = action({
     return { ok: true, ycloudId: data.id };
   },
 });
+
+/**
+ * Reprocesa el último turno del cliente con el bot (p. ej. tras fallo de OpenClaw).
+ * Ignora la respuesta de error previa y envía una nueva respuesta por WhatsApp.
+ */
+export const retryBotResponse = action({
+  args: {
+    tenantId: v.id("tenants"),
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const conversation = await ctx.runQuery(api.conversations.get, {
+      conversationId: args.conversationId,
+    });
+    if (!conversation || conversation.tenantId !== args.tenantId) {
+      throw new Error("Conversación no encontrada");
+    }
+    if (conversation.status === "closed") {
+      throw new Error("Reabre la conversación antes de reintentar con el bot");
+    }
+    if (conversation.assignedTo) {
+      throw new Error(
+        "Activa el bot de nuevo (suelta el control humano) antes de reintentar"
+      );
+    }
+    if (conversation.channel !== "whatsapp") {
+      throw new Error("Solo disponible para conversaciones de WhatsApp");
+    }
+    if (!conversation.threadId) {
+      throw new Error("Esta conversación aún no tiene contexto del bot");
+    }
+
+    const retryCtx = await ctx.runQuery(internal.messages.getRetryContext, {
+      conversationId: args.conversationId,
+    });
+    if (!retryCtx.inbound.length) {
+      throw new Error("No hay mensajes del cliente para que el bot reprocese");
+    }
+
+    await ctx.runAction(internal.system.ycloud.processInboundMessageBatched, {
+      tenantId: args.tenantId,
+      conversationId: args.conversationId,
+      threadId: conversation.threadId,
+      contactId: conversation.externalContactId,
+      customerName: conversation.customerName,
+      channel: conversation.channel,
+      manualRetry: true,
+    });
+
+    return { ok: true };
+  },
+});

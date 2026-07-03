@@ -132,6 +132,46 @@ export const getInboundSinceLastOutbound = internalQuery({
   },
 });
 
+/**
+ * Contexto para reintentar respuesta del bot tras un fallo (p. ej. OpenClaw caído).
+ * Ignora OUTBOUND recientes (incl. "asistente no disponible") y toma el último turno del cliente.
+ */
+export const getRetryContext = internalQuery({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId)
+      )
+      .order("desc")
+      .take(50);
+
+    let i = 0;
+    while (i < msgs.length && msgs[i].direction === "OUTBOUND") i++;
+
+    const inboundBatch = [];
+    while (i < msgs.length && msgs[i].direction === "INBOUND") {
+      inboundBatch.unshift(msgs[i]);
+      i++;
+    }
+
+    let lastAssistantText: string | null = null;
+    if (i < msgs.length && msgs[i].direction === "OUTBOUND") {
+      lastAssistantText = msgs[i].content;
+    }
+
+    return {
+      inbound: inboundBatch.map((m) => ({
+        content: m.content,
+        mediaUrl: m.mediaUrl,
+        mediaType: m.mediaType,
+      })),
+      lastAssistantText,
+    };
+  },
+});
+
 /** Rellena lastMessagePreview en conversaciones existentes (ejecutar una vez). */
 function buildPreview(msg: { content: string; mediaType?: string }) {
   if (msg.mediaType === "image") return "Imagen";
