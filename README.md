@@ -6,6 +6,29 @@ Mezzi centraliza la operación diaria de tu restaurante en un solo lugar: inbox 
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="apps/web/public/md/login-mezzi.png" alt="Login — Mezzi Platform" width="720" />
+</p>
+<p align="center"><em>Login — Cada restaurante accede con sus credenciales a su panel personalizado.</em></p>
+
+<br />
+
+<p align="center">
+  <img src="apps/web/public/md/inbox-alcarbon-cliente.png" alt="Inbox — Conversaciones WhatsApp con IA" width="720" />
+</p>
+<p align="center"><em>Inbox — Conversaciones en tiempo real vía WhatsApp. El bot IA responde automáticamente, escala a humano, envía documentos y gestiona PQRs.</em></p>
+
+<br />
+
+<p align="center">
+  <img src="apps/web/public/md/superadmin-gestion.png" alt="Superadmin — Gestión de restaurantes" width="720" />
+</p>
+<p align="center"><em>Superadmin — Panel de administración multi-tenant: configuración visual, módulos, planes, prompts y dominio personalizado por restaurante.</em></p>
+
+---
+
 ## Funcionalidades
 
 ### Inbox Omnicanal + IA
@@ -33,7 +56,7 @@ Gestión de vacantes por ubicación/ciudad. El bot detecta intención de empleo 
 Perfil automático por cliente: nombre, email, preferencias, historial de contacto. Se alimenta de las conversaciones y se usa como contexto para la IA.
 
 ### Multi-tenant + Superadmin
-Arquitectura multi-restaurante con roles (Owner, Admin, Agent, Viewer, HR), permisos por página, planes de suscripción, y panel de superadministración.
+Arquitectura multi-restaurante con roles (Owner, Admin, Agent, Viewer, HR), permisos por página, planes de suscripción, colores y logo personalizados, y panel de superadministración completo.
 
 ### Integraciones
 - **WhatsApp** vía YCloud (webhook + API)
