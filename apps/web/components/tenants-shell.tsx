@@ -17,11 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Id } from "@/convex";
-import { getHostLogoSrc } from "@/lib/site-branding";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
-import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
 import {
-  DEFAULT_PRIMARY,
   DEFAULT_SECONDARY,
   resolvePrimaryColor,
   resolveSecondaryColor,
@@ -41,7 +38,7 @@ import {
   User as UserIcon,
   Users,
   Link2,
-  Utensils,
+  Flame,
   Settings,
   LogOut,
   ChevronLeft,
@@ -127,16 +124,6 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const displayTenant =
     tenant ?? (hasLoadedTenantRef.current ? lastTenantRef.current : null);
 
-  const hostLogoSrc =
-    typeof window !== "undefined"
-      ? getHostLogoSrc(window.location.hostname)
-      : undefined;
-  const brandLogoSrc =
-    (displayTenant?.logoUrl &&
-      (proxiedTenantAssetUrl(displayTenant.logoUrl) ?? displayTenant.logoUrl)) ||
-    hostLogoSrc;
-  const hasBrandLogo = Boolean(brandLogoSrc);
-
   const ycloudConnected = ycloud?.connected ?? false;
   const primaryColor = isLoading
     ? "#94a3b8"
@@ -144,6 +131,8 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const secondaryColor = isLoading
     ? DEFAULT_SECONDARY
     : resolveSecondaryColor(displayTenant?.secondaryColor);
+  const brandName = displayTenant?.name?.trim() || "Tenant";
+  const brandSubtitle = "Panel";
 
   const cssVars = useMemo(
     () => tenantThemeCssVars(primaryColor, secondaryColor),
@@ -280,39 +269,36 @@ export function TenantsShell({ children }: TenantsShellProps) {
     <Link
       href="/tenants"
       onClick={() => setMobileNavOpen(false)}
+      title={brandName}
       className={cn(
-        "block overflow-hidden rounded-lg transition-opacity duration-150 hover:opacity-90",
-        compact ? "size-12" : "h-12 w-full"
+        "flex items-center overflow-hidden rounded-xl transition-colors",
+        compact
+          ? "mx-auto size-10 justify-center hover:bg-muted"
+          : "w-full gap-3 px-2 py-1.5 hover:bg-muted"
       )}
-      style={
-        !hasBrandLogo
-          ? {
-              background: `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, ${DEFAULT_PRIMARY}))`,
-            }
-          : undefined
-      }
     >
-      {isLoading ? (
-        <span className="flex size-full items-center justify-center bg-muted">
-          <Utensils
-            size={18}
-            strokeWidth={1.5}
-            className="text-muted-foreground"
-          />
-        </span>
-      ) : hasBrandLogo ? (
-        <img
-          src={brandLogoSrc}
-          alt={displayTenant?.name ?? "Logo"}
-          className={
-            compact
-              ? "size-full bg-muted object-contain p-0.5"
-              : "size-full object-contain object-center"
-          }
+      <span
+        className={cn(
+          "grid shrink-0 place-items-center rounded-[10px] shadow-sm",
+          compact ? "size-8" : "size-9"
+        )}
+        style={{ backgroundColor: primaryColor }}
+        aria-hidden
+      >
+        <Flame
+          size={compact ? 16 : 18}
+          strokeWidth={2}
+          className="text-white"
         />
-      ) : (
-        <span className="flex size-full items-center justify-center text-base font-bold text-white">
-          {(displayTenant?.name ?? "·").charAt(0).toUpperCase()}
+      </span>
+      {!compact && (
+        <span className="min-w-0 flex-1 text-left leading-tight">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {isLoading ? "…" : brandName}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {brandSubtitle}
+          </span>
         </span>
       )}
     </Link>
@@ -655,19 +641,23 @@ export function TenantsShell({ children }: TenantsShellProps) {
           </button>
           <Link
             href="/tenants"
-            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+            className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden"
           >
-            {hasBrandLogo ? (
-              <img
-                src={brandLogoSrc}
-                alt={displayTenant?.name ?? "Logo"}
-                className="h-8 w-auto max-w-[148px] object-contain object-left"
-              />
-            ) : (
-              <span className="truncate text-sm font-semibold text-foreground">
-                {displayTenant?.name ?? "Menú"}
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-[10px] shadow-sm"
+              style={{ backgroundColor: primaryColor }}
+              aria-hidden
+            >
+              <Flame size={16} strokeWidth={2} className="text-white" />
+            </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-sm font-medium text-foreground">
+                {brandName}
               </span>
-            )}
+              <span className="block truncate text-xs text-muted-foreground">
+                {brandSubtitle}
+              </span>
+            </span>
           </Link>
           {userMenu(true)}
         </header>
