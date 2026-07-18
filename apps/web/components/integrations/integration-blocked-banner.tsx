@@ -12,7 +12,7 @@ interface IntegrationBlockedBannerProps {
 export function IntegrationBlockedBanner({
   message,
   integrationName = "la integración requerida",
-  primaryColor = "#197fe6",
+  primaryColor = "#dc2626",
 }: IntegrationBlockedBannerProps) {
   return (
     <div

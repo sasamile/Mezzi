@@ -1,6 +1,8 @@
-import { action, internalAction, mutation, query } from "./_generated/server";
+import { action, internalAction, internalQuery, mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 export const list = query({
   args: {
@@ -90,10 +92,22 @@ export const create = mutation({
      *   "sugerencias" | "infraestructura" | "trabaja_nosotros" | "proveedores"
      */
     module: v.optional(v.string()),
+    /** Conversación WhatsApp — se usan sus media INBOUND (imagen/PDF) como adjuntos del correo */
+    conversationId: v.optional(v.id("conversations")),
+    /** Adjuntos subidos desde el panel (foto/PDF opcionales) */
+    uploadedAttachments: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          mediaType: v.union(v.literal("image"), v.literal("document")),
+          fileName: v.optional(v.string()),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const customerName = (args.customerName?.trim() || "Anónimo");
+    const customerName = args.customerName?.trim() || "Anónimo";
 
     // Generar número de ticket legible: año + número secuencial del día
     const date = new Date(now);
@@ -102,6 +116,31 @@ export const create = mutation({
     const dd = String(date.getDate()).padStart(2, "0");
     const seq = String(now).slice(-4); // últimos 4 dígitos del timestamp
     const ticketNumber = `${yy}${mm}${dd}-${seq}`;
+
+    const fromChat = args.conversationId
+      ? await collectInboundAttachments(ctx, args.conversationId)
+      : [];
+
+    const fromUpload: PqrAttachment[] = [];
+    for (const a of args.uploadedAttachments ?? []) {
+      const url = await ctx.storage.getUrl(a.storageId);
+      if (!url) continue;
+      fromUpload.push({
+        url,
+        mediaType: a.mediaType,
+        fileName: a.fileName,
+        storageId: a.storageId,
+      });
+    }
+
+    const seen = new Set<string>();
+    const attachments: PqrAttachment[] = [];
+    for (const a of [...fromUpload, ...fromChat]) {
+      if (seen.has(a.url)) continue;
+      seen.add(a.url);
+      attachments.push(a);
+      if (attachments.length >= MAX_PQR_ATTACHMENTS) break;
+    }
 
     const id = await ctx.db.insert("pqrs", {
       tenantId: args.tenantId,
@@ -116,11 +155,138 @@ export const create = mutation({
       source: args.source,
       module: args.module?.trim() || undefined,
       ticketNumber,
+      conversationId: args.conversationId,
+      attachments: attachments.length > 0 ? attachments : undefined,
       createdAt: now,
       updatedAt: now,
     });
-    await ctx.scheduler.runAfter(0, internal.pqrs.sendPqrNotificationEmail, { pqrId: id });
+    await ctx.scheduler.runAfter(0, internal.pqrs.sendPqrNotificationEmail, {
+      pqrId: id,
+    });
     return id;
+  },
+});
+
+export const generateAttachmentUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+type AttachmentMediaType = "image" | "document";
+
+type PqrAttachment = {
+  url: string;
+  mediaType: AttachmentMediaType;
+  fileName?: string;
+  storageId?: Id<"_storage">;
+};
+
+const MAX_PQR_ATTACHMENTS = 10;
+
+/** Imágenes y documentos INBOUND recientes de la conversación (factura, RUT, etc.). */
+async function collectInboundAttachments(
+  ctx: QueryCtx | MutationCtx,
+  conversationId: Id<"conversations">
+): Promise<PqrAttachment[]> {
+  const msgs = await ctx.db
+    .query("messages")
+    .withIndex("by_conversation", (q) =>
+      q.eq("conversationId", conversationId)
+    )
+    .order("desc")
+    .take(80);
+
+  const out: PqrAttachment[] = [];
+  const seen = new Set<string>();
+
+  for (const m of msgs) {
+    if (m.direction !== "INBOUND") continue;
+    if (!m.mediaUrl) continue;
+    if (m.mediaType !== "image" && m.mediaType !== "document") continue;
+    if (seen.has(m.mediaUrl)) continue;
+    seen.add(m.mediaUrl);
+    out.push({
+      url: m.mediaUrl,
+      mediaType: m.mediaType,
+      fileName: guessAttachmentFileName(m.content, m.mediaType),
+    });
+    if (out.length >= MAX_PQR_ATTACHMENTS) break;
+  }
+
+  return out.reverse();
+}
+
+function guessAttachmentFileName(
+  content: string,
+  mediaType: AttachmentMediaType
+): string {
+  const raw = (content ?? "").trim();
+  const base = raw.split(/[/\\]/).pop() ?? raw;
+  if (/\.(pdf|png|jpe?g|webp|gif|heic|doc|docx)$/i.test(base)) {
+    return base.slice(0, 120);
+  }
+  if (mediaType === "document") {
+    if (base && !/^(documento|document)$/i.test(base)) {
+      const safe = base.replace(/[^\w.\- áéíóúñÁÉÍÓÚÑ]+/gi, "_").slice(0, 80);
+      return /\.pdf$/i.test(safe) ? safe : `${safe || "documento"}.pdf`;
+    }
+    return "documento.pdf";
+  }
+  return "imagen.jpg";
+}
+
+/**
+ * Resuelve adjuntos para el email: los guardados en la PQR, o en vivo
+ * desde la conversación (reenvíos / PQRs antiguas).
+ */
+export const resolveAttachmentsForEmail = internalQuery({
+  args: {
+    pqrId: v.id("pqrs"),
+  },
+  handler: async (ctx, args): Promise<PqrAttachment[]> => {
+    const pqr = await ctx.db.get(args.pqrId);
+    if (!pqr) return [];
+
+    if (pqr.attachments && pqr.attachments.length > 0) {
+      const refreshed: PqrAttachment[] = [];
+      for (const a of pqr.attachments) {
+        let url = a.url;
+        if (a.storageId) {
+          const fresh = await ctx.storage.getUrl(a.storageId);
+          if (fresh) url = fresh;
+        }
+        refreshed.push({
+          url,
+          mediaType: a.mediaType,
+          fileName: a.fileName,
+          storageId: a.storageId,
+        });
+      }
+      return refreshed;
+    }
+
+    let conversationId = pqr.conversationId;
+    if (!conversationId && pqr.customerPhone) {
+      const digits = pqr.customerPhone.replace(/\D/g, "").slice(-10);
+      if (digits.length >= 7) {
+        const convs = await ctx.db
+          .query("conversations")
+          .withIndex("by_tenant_last_message", (q) =>
+            q.eq("tenantId", pqr.tenantId)
+          )
+          .order("desc")
+          .take(80);
+        const match = convs.find((c) =>
+          c.externalContactId.replace(/\D/g, "").endsWith(digits)
+        );
+        conversationId = match?._id;
+      }
+    }
+
+    if (!conversationId) return [];
+    return collectInboundAttachments(ctx, conversationId);
   },
 });
 
@@ -329,6 +495,11 @@ export const sendPqrNotificationEmail = internalAction({
       : `[PQR] Nueva ${typeLabel} - ${pqr.subject}`;
     const emailSubject = args.isResend ? `Reenvío: ${subjectBase}` : subjectBase;
 
+    const attachments = (await ctx.runQuery(
+      internal.pqrs.resolveAttachmentsForEmail,
+      { pqrId: args.pqrId }
+    )) as PqrAttachment[];
+
     const html = `<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 24px;">
@@ -372,8 +543,15 @@ export const sendPqrNotificationEmail = internalAction({
   <p style="margin-top: 20px; font-size: 11px; color: #94a3b8;">
     Canal: ${pqr.source ?? "—"} &nbsp;·&nbsp; ${new Date(pqr.createdAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })}
   </p>
+  ${
+    attachments.length > 0
+      ? `<p style="margin-top: 16px; font-size: 13px; color: #475569;"><strong>Adjuntos (${attachments.length}):</strong> ${attachments.map((a) => a.fileName ?? a.mediaType).join(", ")} — ver archivos adjuntos a este correo.</p>`
+      : ""
+  }
 </body>
 </html>`;
+
+    const brevoAttachments = await downloadAttachmentsForBrevo(attachments);
 
     const body: Record<string, unknown> = {
       sender: { name: senderName, email: senderEmail },
@@ -383,6 +561,9 @@ export const sendPqrNotificationEmail = internalAction({
     };
     if (recipients.cc.length > 0) {
       body.cc = recipients.cc.map((e) => ({ email: e }));
+    }
+    if (brevoAttachments.length > 0) {
+      body.attachment = brevoAttachments;
     }
 
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -398,6 +579,33 @@ export const sendPqrNotificationEmail = internalAction({
     if (!res.ok) {
       const err = await res.text();
       console.error("Brevo PQR email error:", res.status, err);
+      // Si falló por tamaño de adjuntos, reintentar sin ellos para no perder la notificación
+      if (brevoAttachments.length > 0) {
+        console.warn(
+          "PQR email: reintentando sin adjuntos tras error Brevo",
+          pqr.ticketNumber
+        );
+        delete body.attachment;
+        const retry = await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": apiKey,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (retry.ok) {
+          console.info(
+            `PQR email enviado sin adjuntos (fallback): ticket=${pqr.ticketNumber}`
+          );
+          return {
+            ok: true as const,
+            to: recipients.to,
+            cc: recipients.cc,
+          };
+        }
+      }
       return {
         ok: false as const,
         error: `Error al enviar email (${res.status})`,
@@ -405,7 +613,7 @@ export const sendPqrNotificationEmail = internalAction({
     }
 
     console.info(
-      `PQR email enviado: ticket=${pqr.ticketNumber} módulo=${pqr.module ?? "—"} to=[${recipients.to.join(", ")}]${recipients.cc.length > 0 ? ` cc=[${recipients.cc.join(", ")}]` : ""}${args.isResend ? " (reenvío)" : ""}`
+      `PQR email enviado: ticket=${pqr.ticketNumber} módulo=${pqr.module ?? "—"} to=[${recipients.to.join(", ")}]${recipients.cc.length > 0 ? ` cc=[${recipients.cc.join(", ")}]` : ""} adjuntos=${brevoAttachments.length}${args.isResend ? " (reenvío)" : ""}`
     );
     return {
       ok: true as const,
@@ -414,6 +622,79 @@ export const sendPqrNotificationEmail = internalAction({
     };
   },
 });
+
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB por archivo (Brevo ~20 MB total)
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function extensionFromContentType(contentType: string | null): string {
+  if (!contentType) return "";
+  const ct = contentType.toLowerCase();
+  if (ct.includes("pdf")) return ".pdf";
+  if (ct.includes("png")) return ".png";
+  if (ct.includes("jpeg") || ct.includes("jpg")) return ".jpg";
+  if (ct.includes("webp")) return ".webp";
+  if (ct.includes("gif")) return ".gif";
+  if (ct.includes("heic")) return ".heic";
+  return "";
+}
+
+async function downloadAttachmentsForBrevo(
+  attachments: PqrAttachment[]
+): Promise<Array<{ name: string; content: string }>> {
+  const out: Array<{ name: string; content: string }> = [];
+
+  for (const [index, a] of attachments.entries()) {
+    try {
+      const res = await fetch(a.url);
+      if (!res.ok) {
+        console.warn(
+          `PQR attachment HTTP ${res.status}: ${a.fileName ?? a.url}`
+        );
+        continue;
+      }
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength === 0) continue;
+      if (buf.byteLength > MAX_ATTACHMENT_BYTES) {
+        console.warn(
+          `PQR attachment too large (${buf.byteLength} bytes): ${a.fileName ?? a.url}`
+        );
+        continue;
+      }
+
+      let name = (a.fileName ?? "").trim() || `adjunto-${index + 1}`;
+      const ext = extensionFromContentType(res.headers.get("content-type"));
+      if (ext && !/\.[a-z0-9]{2,5}$/i.test(name)) {
+        name = `${name}${ext}`;
+      } else if (a.mediaType === "document" && !/\.[a-z0-9]{2,5}$/i.test(name)) {
+        name = `${name}.pdf`;
+      } else if (a.mediaType === "image" && !/\.[a-z0-9]{2,5}$/i.test(name)) {
+        name = `${name}.jpg`;
+      }
+
+      out.push({
+        name: name.slice(0, 120),
+        content: arrayBufferToBase64(buf),
+      });
+    } catch (err) {
+      console.warn(
+        "PQR attachment download failed:",
+        a.fileName ?? a.url,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return out;
+}
 
 /** Reenvía la notificación por email (desde el panel). */
 export const resendNotificationEmail = action({

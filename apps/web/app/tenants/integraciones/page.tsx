@@ -1,5 +1,7 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex";
@@ -17,7 +19,6 @@ import { IntegrationsIntroModal } from "@/components/integrations/integrations-i
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_PRIMARY = "#197fe6";
 
 function getIntegrationStatus(
   integration: IntegrationDefinition,
@@ -62,7 +63,7 @@ export default function IntegracionesPage() {
     tenantId ? { tenantId } : "skip"
   );
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
 
   const filteredBySearch = useMemo(() => {
     if (!searchQuery.trim()) return INTEGRATIONS_CATALOG;
@@ -98,7 +99,7 @@ export default function IntegracionesPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando...</p>
+        <p className="text-muted-foreground">Cargando...</p>
       </div>
     );
   }
@@ -108,13 +109,13 @@ export default function IntegracionesPage() {
       className="flex min-h-full flex-col overflow-y-auto p-6 sm:p-8 md:p-10"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="w-full">
         {/* Header */}
         <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Centro de Integraciones
           </h1>
-          <p className="mt-2 text-base text-slate-500 sm:text-lg">
+          <p className="mt-2 text-base text-muted-foreground sm:text-lg">
             Conecta tus herramientas externas para habilitar funcionalidades del
             sistema.
           </p>
@@ -127,7 +128,7 @@ export default function IntegracionesPage() {
         <div className="mb-8">
           <div className="relative max-w-md">
             <Search
-              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400"
+              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               strokeWidth={2}
             />
             <input
@@ -135,7 +136,7 @@ export default function IntegracionesPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar integración…"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
         </div>
@@ -154,10 +155,10 @@ export default function IntegracionesPage() {
                 <section key={category}>
                   <div className="mb-4 flex items-center gap-2">
                     <CatIcon
-                      className="size-5 text-slate-500"
+                      className="size-5 text-muted-foreground"
                       strokeWidth={2}
                     />
-                    <h2 className="text-lg font-semibold text-slate-800">
+                    <h2 className="text-lg font-semibold text-foreground">
                       {catMeta.label}
                     </h2>
                   </div>
@@ -189,7 +190,7 @@ export default function IntegracionesPage() {
 
         {filteredBySearch.length === 0 && (
           <div className="py-12 text-center">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               No se encontraron integraciones para &quot;{searchQuery}&quot;
             </p>
           </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { Check } from "lucide-react";
 
 export function PromptTab({ tenantId }: { tenantId: Id<"tenants"> }) {

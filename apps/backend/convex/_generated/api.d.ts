@@ -11,6 +11,7 @@
 import type * as activityLog from "../activityLog.js";
 import type * as auth from "../auth.js";
 import type * as chatEmpresa from "../chatEmpresa.js";
+import type * as conversationFolders from "../conversationFolders.js";
 import type * as conversations from "../conversations.js";
 import type * as customers from "../customers.js";
 import type * as dashboard from "../dashboard.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   activityLog: typeof activityLog;
   auth: typeof auth;
   chatEmpresa: typeof chatEmpresa;
+  conversationFolders: typeof conversationFolders;
   conversations: typeof conversations;
   customers: typeof customers;
   dashboard: typeof dashboard;

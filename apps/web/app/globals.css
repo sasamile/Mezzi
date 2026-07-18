@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light;
   --accent: oklch(0.97 0 0);
   --accent-hover: #b91c1c;
   --accent-light: #fef2f2;
@@ -28,6 +29,23 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* Tenant brand — --primaryColor set by shell; softs adapt to theme */
+  --primaryColor: #dc2626;
+  --primarySoft: color-mix(in srgb, var(--primaryColor) 14%, white);
+  --primaryMuted: color-mix(in srgb, var(--primaryColor) 8%, white);
+  --primaryLight: color-mix(in srgb, var(--primaryColor) 22%, white);
+  --primaryDark: color-mix(in srgb, var(--primaryColor) 78%, #1a1a2e);
+  /* Inbox light tokens */
+  --inbox-bg: #ffffff;
+  --inbox-chat: #fafafa;
+  --inbox-panel: #ffffff;
+  --inbox-panel-muted: #f4f4f5;
+  --inbox-border: oklch(0.922 0 0);
+  --inbox-input: #f4f4f5;
+  --inbox-bubble-in: #ffffff;
+  --inbox-bubble-in-fg: oklch(0.145 0 0);
+  --inbox-bubble-out: color-mix(in srgb, var(--primaryColor) 14%, white);
+  --inbox-bubble-out-fg: oklch(0.145 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -80,6 +98,16 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-inbox-bg: var(--inbox-bg);
+  --color-inbox-chat: var(--inbox-chat);
+  --color-inbox-panel: var(--inbox-panel);
+  --color-inbox-panel-muted: var(--inbox-panel-muted);
+  --color-inbox-border: var(--inbox-border);
+  --color-inbox-input: var(--inbox-input);
+  --color-inbox-bubble-in: var(--inbox-bubble-in);
+  --color-inbox-bubble-in-fg: var(--inbox-bubble-in-fg);
+  --color-inbox-bubble-out: var(--inbox-bubble-out);
+  --color-inbox-bubble-out-fg: var(--inbox-bubble-out-fg);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -98,6 +126,7 @@ body {
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -116,6 +145,19 @@ body {
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --primarySoft: color-mix(in srgb, var(--primaryColor) 22%, var(--card));
+  --primaryMuted: color-mix(in srgb, var(--primaryColor) 14%, var(--card));
+  --primaryLight: color-mix(in srgb, var(--primaryColor) 28%, var(--card));
+  --inbox-bg: oklch(0.145 0 0);
+  --inbox-chat: oklch(0.17 0 0);
+  --inbox-panel: oklch(0.205 0 0);
+  --inbox-panel-muted: oklch(0.24 0 0);
+  --inbox-border: oklch(1 0 0 / 10%);
+  --inbox-input: oklch(0.24 0 0);
+  --inbox-bubble-in: oklch(0.24 0 0);
+  --inbox-bubble-in-fg: oklch(0.985 0 0);
+  --inbox-bubble-out: color-mix(in srgb, var(--primaryColor) 28%, var(--card));
+  --inbox-bubble-out-fg: oklch(0.985 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -186,4 +228,15 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Scroll oculto (sigue haciendo scroll; sin barra visible) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

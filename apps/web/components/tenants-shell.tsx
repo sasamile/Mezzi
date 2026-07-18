@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { useQuery } from "convex/react";
@@ -20,6 +20,13 @@ import type { Id } from "@/convex";
 import { getHostLogoSrc } from "@/lib/site-branding";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
 import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
+import {
+  DEFAULT_PRIMARY,
+  DEFAULT_SECONDARY,
+  resolvePrimaryColor,
+  resolveSecondaryColor,
+  tenantThemeCssVars,
+} from "@/lib/tenant-theme";
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
@@ -39,16 +46,16 @@ import {
   LogOut,
   ChevronLeft,
   ChevronDown,
+  Menu,
+  X,
   type LucideIcon,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 interface TenantsShellProps {
   children: ReactNode;
 }
-
-/** Colores neutros solo mientras carga; luego se usan los del tenant */
-const LOADING_PRIMARY = "#64748b";
-const LOADING_SECONDARY = "#94a3b8";
 
 interface NavEntry {
   href: string;
@@ -58,7 +65,6 @@ interface NavEntry {
   group: string;
   disabled?: boolean;
   disabledTitle?: string;
-  /** Requiere este módulo habilitado. undefined = siempre visible */
   module?: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs";
 }
 
@@ -68,27 +74,42 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const { user, logout } = useAuth();
   const { tenantId } = useTenant();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const tenant = useQuery(
-    api.tenants.get,
-    tenantId ? { tenantId } : "skip"
-  );
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  const tenant = useQuery(api.tenants.get, tenantId ? { tenantId } : "skip");
   const ycloud = useQuery(
     api.integrations.getYCloud,
     tenantId ? { tenantId } : "skip"
   );
   const needingAttention = useQuery(
     api.conversations.countNeedingAttention,
-    tenantId && ycloud?.connected ? { tenantId } : "skip"
+    tenantId && ycloud?.connected
+      ? { tenantId, userId: (user?._id as Id<"users">) ?? undefined }
+      : "skip"
   );
   const membership = useQuery(
     api.users.getMembershipByTenantAndUser,
-    tenantId && user?._id ? { tenantId, userId: user._id as Id<"users"> } : "skip"
+    tenantId && user?._id
+      ? { tenantId, userId: user._id as Id<"users"> }
+      : "skip"
   );
 
   const baseHref = "/tenants";
+  const isInbox = pathname.startsWith(`${baseHref}/inbox`);
 
-  // Solo mostrar loading en la carga inicial. Cuando actualiza/revalida, no volver a mostrar skeleton
   const hasLoadedTenantRef = useRef(false);
   const prevTenantIdRef = useRef<string | null>(null);
   const lastTenantRef = useRef<typeof tenant>(null);
@@ -101,12 +122,15 @@ export function TenantsShell({ children }: TenantsShellProps) {
     hasLoadedTenantRef.current = true;
     lastTenantRef.current = tenant;
   }
-  const isLoading = tenantId && tenant === undefined && !hasLoadedTenantRef.current;
-  // Usar último tenant conocido durante revalidaciones para evitar parpadeos
-  const displayTenant = tenant ?? (hasLoadedTenantRef.current ? lastTenantRef.current : null);
+  const isLoading =
+    Boolean(tenantId) && tenant === undefined && !hasLoadedTenantRef.current;
+  const displayTenant =
+    tenant ?? (hasLoadedTenantRef.current ? lastTenantRef.current : null);
 
   const hostLogoSrc =
-    typeof window !== "undefined" ? getHostLogoSrc(window.location.hostname) : undefined;
+    typeof window !== "undefined"
+      ? getHostLogoSrc(window.location.hostname)
+      : undefined;
   const brandLogoSrc =
     (displayTenant?.logoUrl &&
       (proxiedTenantAssetUrl(displayTenant.logoUrl) ?? displayTenant.logoUrl)) ||
@@ -114,19 +138,15 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const hasBrandLogo = Boolean(brandLogoSrc);
 
   const ycloudConnected = ycloud?.connected ?? false;
-  const primaryColor = isLoading ? LOADING_PRIMARY : (displayTenant?.primaryColor ?? LOADING_PRIMARY);
-  const secondaryColor = isLoading ? LOADING_SECONDARY : (displayTenant?.secondaryColor ?? LOADING_SECONDARY);
+  const primaryColor = isLoading
+    ? "#94a3b8"
+    : resolvePrimaryColor(displayTenant?.primaryColor);
+  const secondaryColor = isLoading
+    ? DEFAULT_SECONDARY
+    : resolveSecondaryColor(displayTenant?.secondaryColor);
 
   const cssVars = useMemo(
-    () =>
-      ({
-        "--primaryColor": primaryColor,
-        "--primaryLight": `color-mix(in srgb, ${primaryColor} 25%, white)`,
-        "--primarySoft": `color-mix(in srgb, ${primaryColor} 12%, white)`,
-        "--secondaryColor": secondaryColor,
-        "--secondaryLight": `color-mix(in srgb, ${secondaryColor} 25%, white)`,
-        "--secondarySoft": `color-mix(in srgb, ${secondaryColor} 12%, white)`,
-      } as React.CSSProperties),
+    () => tenantThemeCssVars(primaryColor, secondaryColor),
     [primaryColor, secondaryColor]
   );
 
@@ -147,13 +167,19 @@ export function TenantsShell({ children }: TenantsShellProps) {
 
   const allowedPages = membership?.allowedPages;
   const hasPageAccess = (pageKey: string) => {
-    // undefined o vacío = todas las páginas (retrocompatible)
     if (!allowedPages || allowedPages.length === 0) return true;
     return allowedPages.includes(pageKey);
   };
 
-  const navEntries: NavEntry[] = [
-    { href: "/tenants", pageKey: "dashboard", Icon: LayoutGrid, label: "Dashboard", group: "General" },
+  const navEntries: NavEntry[] = (
+    [
+    {
+      href: "/tenants",
+      pageKey: "dashboard",
+      Icon: LayoutGrid,
+      label: "Dashboard",
+      group: "General",
+    },
     {
       href: `${baseHref}/inbox`,
       pageKey: "inbox",
@@ -233,341 +259,458 @@ export function TenantsShell({ children }: TenantsShellProps) {
       label: "Integraciones",
       group: "Integraciones",
     },
-    { href: `${baseHref}/users`, pageKey: "users", Icon: Users, label: "Usuarios", group: "Usuarios" },
-  ].filter((e) => {
+    {
+      href: `${baseHref}/users`,
+      pageKey: "users",
+      Icon: Users,
+      label: "Usuarios",
+      group: "Usuarios",
+    },
+  ] as NavEntry[]
+  ).filter((e) => {
     if (!tenantId && e.group !== "General") return false;
-    const m = e.module as "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs" | undefined;
-    if (m && !hasModule(m)) return false;
+    if (e.module && !hasModule(e.module)) return false;
     if (!hasPageAccess(e.pageKey)) return false;
     return true;
   });
 
   const groups = [...new Set(navEntries.map((e) => e.group))];
 
-  return (
-    <div
-      className="flex h-screen overflow-hidden text-slate-800 font-(--font-jakarta)"
-      style={{
-        ...cssVars,
-        background: "#f6f7f8",
-      }}
-    >
-      {/* Sidebar */}
-      <aside
-        className={`
-          shrink-0 flex flex-col overflow-hidden
-          transition-all duration-300 ease-out m-3
-          ${collapsed ? "w-[72px]" : "w-[240px]"}
-        `}
-        style={{
-          background: "#fafbfc",
-          border: "1px solid #e4e7eb",
-          borderRadius: 16,
-          boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.04)",
-        }}
-      >
-        {/* Brand */}
-        <div
-          className={`shrink-0 border-b border-slate-100 px-3 pt-3 pb-3 ${collapsed ? "flex justify-center" : ""}`}
-        >
-          <Link
-            href="/tenants"
-            className={`block overflow-hidden rounded-lg transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98] ${
-              collapsed ? "size-15" : "h-13 w-full"
-            }`}
-            style={
-              !hasBrandLogo
-                ? {
-                    background: `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e)))`,
-                    boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
-                  }
-                : undefined
+  const brandBlock = (compact: boolean) => (
+    <Link
+      href="/tenants"
+      onClick={() => setMobileNavOpen(false)}
+      className={cn(
+        "block overflow-hidden rounded-lg transition-opacity duration-150 hover:opacity-90",
+        compact ? "size-12" : "h-12 w-full"
+      )}
+      style={
+        !hasBrandLogo
+          ? {
+              background: `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, ${DEFAULT_PRIMARY}))`,
             }
+          : undefined
+      }
+    >
+      {isLoading ? (
+        <span className="flex size-full items-center justify-center bg-muted">
+          <Utensils
+            size={18}
+            strokeWidth={1.5}
+            className="text-muted-foreground"
+          />
+        </span>
+      ) : hasBrandLogo ? (
+        <img
+          src={brandLogoSrc}
+          alt={displayTenant?.name ?? "Logo"}
+          className={
+            compact
+              ? "size-full bg-muted object-contain p-0.5"
+              : "size-full object-contain object-center"
+          }
+        />
+      ) : (
+        <span className="flex size-full items-center justify-center text-base font-bold text-white">
+          {(displayTenant?.name ?? "·").charAt(0).toUpperCase()}
+        </span>
+      )}
+    </Link>
+  );
+
+  const iconNav = (
+    <div className="flex flex-col items-center gap-1 pt-2">
+      {navEntries.map((entry) => {
+        const active = !entry.disabled && isActive(entry.href);
+        const showBadge =
+          !entry.disabled &&
+          entry.href.includes("/inbox") &&
+          (needingAttention ?? 0) > 0;
+        const tip = entry.disabled
+          ? (entry.disabledTitle ?? entry.label)
+          : entry.label;
+        const iconBtn = (
+          <span
+            className={cn(
+              "relative flex size-10 items-center justify-center rounded-xl transition-colors duration-150",
+              entry.disabled
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer",
+              active
+                ? "bg-(--primarySoft) text-(--primaryColor)"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
           >
-            {isLoading ? (
-              <span className="flex size-full items-center justify-center bg-slate-100">
-                <Utensils size={18} strokeWidth={1.5} className="text-slate-400" />
-              </span>
-            ) : hasBrandLogo ? (
-              <img
-                src={brandLogoSrc}
-                alt={displayTenant?.name ?? "Logo"}
-                className={
-                  collapsed
-                    ? "size-full bg-slate-100 object-contain p-0.5"
-                    : "size-full object-contain object-center"
-                }
-              />
-            ) : (
-              <span className="flex size-full items-center justify-center text-base font-bold text-white">
-                {(displayTenant?.name ?? "·").charAt(0).toUpperCase()}
+            <entry.Icon size={19} strokeWidth={1.7} />
+            {showBadge && (
+              <span
+                className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full px-0.5 text-[9px] font-bold tabular-nums text-white"
+                style={{ background: "var(--primaryColor)" }}
+              >
+                {needingAttention}
               </span>
             )}
-          </Link>
-        </div>
+          </span>
+        );
+        return entry.disabled ? (
+          <SidebarTooltip key={entry.label} label={tip}>
+            {iconBtn}
+          </SidebarTooltip>
+        ) : (
+          <SidebarTooltip key={entry.label} label={tip}>
+            <Link
+              href={entry.href}
+              className="flex justify-center"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label={entry.label}
+            >
+              {iconBtn}
+            </Link>
+          </SidebarTooltip>
+        );
+      })}
+    </div>
+  );
 
-        {/* Navegación */}
-        <nav className="flex-1 overflow-y-auto min-h-0 px-2.5 pb-2">
-          {isLoading ? (
-            <div className="flex flex-col gap-2 px-2 pt-2">
-              <Skeleton className="h-8 w-full rounded-md" />
-              <Skeleton className="h-8 w-full rounded-md" />
-              <Skeleton className="h-8 w-full rounded-md" />
-              <Skeleton className="h-6 w-3/4 rounded-md" />
-              <Skeleton className="h-8 w-full rounded-md" />
-              <Skeleton className="h-8 w-full rounded-md" />
-            </div>
-          ) : collapsed ? (
-            <div className="flex flex-col gap-1 items-center pt-2">
-              {navEntries.map((entry) => {
-                const active = !entry.disabled && isActive(entry.href);
-                const showBadge =
-                  !entry.disabled &&
-                  entry.href.includes("/inbox") &&
-                  (needingAttention ?? 0) > 0;
-                const iconBtn = (
-                  <span
-                    title={entry.disabled ? entry.disabledTitle : entry.label}
-                    className={cn(
-                      "relative size-10 rounded-xl flex items-center justify-center transition-all duration-150",
-                      entry.disabled
-                        ? "cursor-not-allowed opacity-50"
-                        : "cursor-pointer active:scale-95",
-                      !active && !entry.disabled && "hover:bg-white/60"
-                    )}
+  const labelNav = (
+    <div className="flex flex-col gap-1 pt-3">
+      {groups.map((group) => (
+        <div key={group} className="flex flex-col">
+          <p className="mb-1.5 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {group}
+          </p>
+          {navEntries
+            .filter((e) => e.group === group)
+            .map((entry) => {
+              const active = !entry.disabled && isActive(entry.href);
+              const showAttn =
+                !entry.disabled &&
+                entry.href.includes("/inbox") &&
+                (needingAttention ?? 0) > 0;
+              const content = (
+                <span
+                  className={cn(
+                    "relative mx-1.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-colors duration-150",
+                    entry.disabled
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer",
+                    active
+                      ? "bg-(--primarySoft) font-semibold text-foreground ring-1 ring-(--primaryColor)/10"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <entry.Icon
+                    size={18}
+                    strokeWidth={1.7}
+                    className="shrink-0"
                     style={
-                      active
-                        ? {
-                            background: "rgba(255,255,255,0.95)",
-                            border: "1px solid rgba(15,23,42,0.08)",
-                            boxShadow:
-                              "0 1px 2px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.7)",
-                            color: "var(--primaryColor)",
-                          }
-                        : { color: "#64748b" }
+                      active ? { color: "var(--primaryColor)" } : undefined
                     }
-                  >
-                    <entry.Icon size={19} strokeWidth={1.7} />
-                    {showBadge && (
-                      <span
-                        className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] rounded-full grid place-items-center text-white text-[9px] font-bold tabular-nums"
-                        style={{ background: "var(--primaryColor)" }}
-                      >
-                        {needingAttention}
-                      </span>
-                    )}
-                  </span>
-                );
-                return entry.disabled ? (
-                  <span key={entry.label}>{iconBtn}</span>
-                ) : (
-                  <Link key={entry.label} href={entry.href} className="flex justify-center">
-                    {iconBtn}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1 pt-3">
-              {groups.map((group) => (
-                <div key={group} className="flex flex-col">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-1.5 mt-2">
-                    {group}
-                  </p>
-                  {navEntries
-                    .filter((e) => e.group === group)
-                    .map((entry) => {
-                      const active = !entry.disabled && isActive(entry.href);
-                      const showAttn =
-                        !entry.disabled &&
-                        entry.href.includes("/inbox") &&
-                        (needingAttention ?? 0) > 0;
-                      const content = (
-                        <span
-                          className={cn(
-                            "relative flex items-center gap-3 py-2.5 px-3 mx-1.5 rounded-xl transition-all text-[13.5px]",
-                            entry.disabled
-                              ? "cursor-not-allowed opacity-60"
-                              : "cursor-pointer",
-                            !active && !entry.disabled && "hover:bg-white/60"
-                          )}
-                          style={
-                            active
-                              ? {
-                                  background: "rgba(255,255,255,0.95)",
-                                  border: "1px solid rgba(15,23,42,0.08)",
-                                  boxShadow:
-                                    "0 1px 2px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,0.7)",
-                                  color: "#0f172a",
-                                  fontWeight: 600,
-                                }
-                              : { color: "#475569" }
-                          }
-                        >
-                          <entry.Icon
-                            size={18}
-                            strokeWidth={1.7}
-                            className="shrink-0"
-                            style={active ? { color: "var(--primaryColor)" } : undefined}
-                          />
-                          <span className="flex-1 truncate">{entry.label}</span>
-                          {showAttn && (
-                            <span
-                              className="text-[10px] font-bold tabular-nums text-white rounded-full px-1.5 py-px"
-                              style={{ background: "var(--primaryColor)" }}
-                            >
-                              {needingAttention}
-                            </span>
-                          )}
-                          {entry.disabled && (
-                            <span className="text-[9.5px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                              off
-                            </span>
-                          )}
-                        </span>
-                      );
-                      return entry.disabled ? (
-                        <span key={entry.label} title={entry.disabledTitle}>
-                          {content}
-                        </span>
-                      ) : (
-                        <Link key={entry.label} href={entry.href}>
-                          {content}
-                        </Link>
-                      );
-                    })}
-                </div>
-              ))}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                  {showAttn && (
+                    <span
+                      className="rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums text-white"
+                      style={{ background: "var(--primaryColor)" }}
+                    >
+                      {needingAttention}
+                    </span>
+                  )}
+                  {entry.disabled && (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      off
+                    </span>
+                  )}
+                </span>
+              );
+              return entry.disabled ? (
+                <span key={entry.label} title={entry.disabledTitle}>
+                  {content}
+                </span>
+              ) : (
+                <Link
+                  key={entry.label}
+                  href={entry.href}
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  {content}
+                </Link>
+              );
+            })}
+        </div>
+      ))}
+    </div>
+  );
+
+  const userMenu = (compact: boolean) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            "flex w-full items-center gap-3 px-3 py-3 transition-colors hover:bg-muted",
+            compact && "justify-center"
+          )}
+        >
+          <div
+            className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-bold text-white"
+            style={{
+              background: isLoading
+                ? "var(--muted)"
+                : `linear-gradient(135deg, var(--primaryColor), var(--primaryDark))`,
+            }}
+          >
+            {(user?.name ?? "U").charAt(0).toUpperCase()}
+          </div>
+          {!compact && (
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-[13px] font-semibold leading-tight text-foreground">
+                {user?.name ?? "Usuario"}
+              </p>
+              <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground">
+                {user?.email ?? ""}
+              </p>
             </div>
           )}
-        </nav>
+          {!compact && (
+            <ChevronDown
+              size={16}
+              strokeWidth={1.7}
+              className="shrink-0 text-muted-foreground"
+            />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56 shadow-md">
+        <DropdownMenuLabel>
+          <p className="font-semibold">{user?.name ?? "Usuario"}</p>
+          <p className="text-xs font-normal text-muted-foreground">
+            {user?.email ?? ""}
+          </p>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link
+            href={tenantId ? `${baseHref}/ajustes` : baseHref}
+            className="cursor-pointer"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <Settings size={16} strokeWidth={1.5} className="mr-2" />
+            Ajustes
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer text-destructive focus:text-destructive"
+          onSelect={() => {
+            logout();
+            router.push("/login");
+          }}
+        >
+          <LogOut size={16} strokeWidth={1.5} className="mr-2" />
+          Cerrar sesión
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
-        {/* Bottom: usuario + toggle */}
-        <div className="shrink-0 border-t border-slate-100">
-          {/* Dropdown usuario */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  "flex items-center gap-3 w-full px-3 py-3 transition-colors hover:bg-slate-50",
-                  collapsed && "justify-center"
-                )}
-              >
-                <div
-                  className="size-9 rounded-full grid place-items-center shrink-0 overflow-hidden text-white font-bold text-sm"
-                  style={{
-                    background: isLoading
-                      ? "#e2e8f0"
-                      : `linear-gradient(135deg, var(--primaryColor), var(--primaryDark, color-mix(in srgb, var(--primaryColor) 75%, #1a1a2e)))`,
-                  }}
-                >
-                  {(user?.name ?? "U").charAt(0).toUpperCase()}
-                </div>
-                {!collapsed && (
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-[13px] font-bold text-slate-900 truncate leading-tight">
-                      {user?.name ?? "Usuario"}
-                    </p>
-                    <p className="text-[10.5px] text-slate-500 truncate mt-0.5">
-                      {user?.email ?? ""}
-                    </p>
-                  </div>
-                )}
-                {!collapsed && (
-                  <ChevronDown
-                    size={16}
-                    strokeWidth={1.7}
-                    className="text-slate-400 shrink-0"
-                  />
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <p className="font-semibold">{user?.name ?? "Usuario"}</p>
-                <p className="text-xs font-normal text-slate-500">{user?.email ?? ""}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link
-                  href={tenantId ? `${baseHref}/ajustes` : baseHref}
-                  className="cursor-pointer"
-                >
-                  <Settings size={16} strokeWidth={1.5} className="mr-2" />
-                  Ajustes
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600 cursor-pointer"
-                onSelect={() => {
-                  logout();
-                  router.push("/login");
-                }}
-              >
-                <LogOut size={16} strokeWidth={1.5} className="mr-2" />
-                Cerrar sesión
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+  const sidebarInner = (opts: {
+    iconOnly: boolean;
+    showClose?: boolean;
+    showCollapseToggle?: boolean;
+  }) => (
+    <>
+      <div
+        className={cn(
+          "px-3 py-3",
+          opts.iconOnly && !opts.showClose && "flex justify-center",
+          opts.showClose && "flex items-center gap-2"
+        )}
+      >
+        <div className={cn(opts.showClose && "min-w-0 flex-1")}>
+          {brandBlock(opts.iconOnly)}
+        </div>
+        {opts.showClose && (
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Cerrar menú"
+          >
+            <X size={18} strokeWidth={1.7} />
+          </button>
+        )}
+      </div>
 
-          {/* Toggle colapsar */}
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+        {isLoading ? (
+          <div className="flex flex-col gap-2 px-2 pt-2">
+            <Skeleton className="h-8 w-full rounded-lg" />
+            <Skeleton className="h-8 w-full rounded-lg" />
+            <Skeleton className="h-8 w-full rounded-lg" />
+            <Skeleton className="h-6 w-3/4 rounded-lg" />
+          </div>
+        ) : opts.iconOnly ? (
+          iconNav
+        ) : (
+          labelNav
+        )}
+      </nav>
+
+      <div className="shrink-0 border-t border-border">
+        <div
+          className={cn(
+            "px-1 pt-2",
+            opts.iconOnly && "flex justify-center px-0"
+          )}
+        >
+          <ThemeToggle collapsed={opts.iconOnly} />
+        </div>
+        {userMenu(opts.iconOnly)}
+        {opts.showCollapseToggle && (
           <button
             type="button"
             onClick={() => setCollapsed((x) => !x)}
-            className="flex items-center justify-center gap-2 w-full py-2 text-slate-400 hover:bg-slate-50 transition-colors border-t border-slate-100"
-            title={collapsed ? "Expandir menú" : "Colapsar menú"}
+            className="flex w-full items-center justify-center gap-2 border-t border-border py-2 text-muted-foreground transition-colors hover:bg-muted"
+            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
           >
-            <ChevronLeft
-              size={16}
-              strokeWidth={1.7}
-              className={cn("transition-transform duration-200", collapsed && "rotate-180")}
-            />
-            {!collapsed && (
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Colapsar
-              </span>
+            {collapsed ? (
+              <SidebarTooltip label="Expandir menú" side="right">
+                <span className="inline-flex size-8 items-center justify-center">
+                  <ChevronLeft
+                    size={16}
+                    strokeWidth={1.7}
+                    className="rotate-180 transition-transform duration-200"
+                  />
+                </span>
+              </SidebarTooltip>
+            ) : (
+              <>
+                <ChevronLeft
+                  size={16}
+                  strokeWidth={1.7}
+                  className="transition-transform duration-200"
+                />
+                <span className="text-[10px] font-semibold uppercase tracking-wider">
+                  Colapsar
+                </span>
+              </>
             )}
           </button>
-        </div>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <div
+      className="flex h-screen overflow-hidden bg-muted/40 text-foreground"
+      style={cssVars}
+    >
+      {/* Overlay móvil */}
+      <div
+        role="presentation"
+        className={cn(
+          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 lg:hidden",
+          mobileNavOpen
+            ? "opacity-100"
+            : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setMobileNavOpen(false)}
+      />
+
+      {/* Drawer móvil */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-[min(280px,88vw)] flex-col overflow-hidden border-r border-border bg-card shadow-md transition-transform duration-200 ease-out lg:hidden",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+        aria-hidden={!mobileNavOpen}
+      >
+        {sidebarInner({ iconOnly: false, showClose: true })}
       </aside>
 
-      {/* Main - área de contenido */}
-      <main className="flex-1 my-3 mr-3 ml-0 flex flex-col overflow-hidden min-w-0">
+      {/* Sidebar desktop */}
+      <aside
+        className={cn(
+          "m-3 hidden shrink-0 flex-col overflow-hidden rounded-2xl transition-all duration-200 ease-out lg:flex",
+          collapsed ? "w-[72px]" : "w-[240px]"
+        )}
+      >
+        {sidebarInner({
+          iconOnly: collapsed,
+          showCollapseToggle: true,
+        })}
+      </aside>
+
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden lg:my-3 lg:mr-3">
+        {/* Barra móvil: abre el menú */}
+        <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="grid size-9 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} strokeWidth={1.7} />
+          </button>
+          <Link
+            href="/tenants"
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+          >
+            {hasBrandLogo ? (
+              <img
+                src={brandLogoSrc}
+                alt={displayTenant?.name ?? "Logo"}
+                className="h-8 w-auto max-w-[148px] object-contain object-left"
+              />
+            ) : (
+              <span className="truncate text-sm font-semibold text-foreground">
+                {displayTenant?.name ?? "Menú"}
+              </span>
+            )}
+          </Link>
+          {userMenu(true)}
+        </header>
+
         <div
-          className="flex flex-1 min-h-0 flex-col overflow-hidden bg-white"
-          style={{
-            border: "1px solid #e4e7eb",
-            borderRadius: 16,
-            boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.04)",
-          }}
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden bg-card",
+            "border-0 shadow-none lg:rounded-2xl lg:border lg:border-border lg:shadow-sm"
+          )}
         >
           {isLoading ? (
             <div className="flex flex-1 flex-col overflow-y-auto p-6 sm:p-8 md:p-10">
-              <div className="mx-auto w-full max-w-6xl space-y-8">
+              <div className="mx-auto w-full space-y-8 p-4 md:p-6 lg:p-8">
                 <div className="space-y-3">
                   <Skeleton className="h-8 w-64" />
                   <Skeleton className="h-4 w-96" />
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                   {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-28 rounded-2xl" />
+                    <Skeleton key={i} className="h-28 rounded-xl" />
                   ))}
                 </div>
                 <div className="grid gap-8 lg:grid-cols-3">
                   <div className="space-y-4 lg:col-span-2">
-                    <Skeleton className="h-48 rounded-2xl" />
-                    <Skeleton className="h-36 rounded-2xl" />
+                    <Skeleton className="h-48 rounded-xl" />
+                    <Skeleton className="h-36 rounded-xl" />
                   </div>
                   <div className="space-y-4">
-                    <Skeleton className="h-32 rounded-2xl" />
-                    <Skeleton className="h-48 rounded-2xl" />
+                    <Skeleton className="h-32 rounded-xl" />
+                    <Skeleton className="h-48 rounded-xl" />
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            children
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 flex-col",
+                isInbox ? "overflow-hidden" : "overflow-y-auto"
+              )}
+            >
+              {children}
+            </div>
           )}
         </div>
       </main>

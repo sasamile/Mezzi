@@ -66,7 +66,7 @@ export function ManagePermissionsModal({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && (
-            <p className="text-sm text-slate-500">{description}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
           )}
         </DialogHeader>
 
@@ -96,7 +96,7 @@ export function ManagePermissionsModal({
               if (items.length === 0) return null;
               return (
                 <div key={group}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     {group}
                   </p>
                   <div className="space-y-2">
@@ -106,18 +106,18 @@ export function ManagePermissionsModal({
                         className={cn(
                           "flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
                           allowedPages.includes(page.key)
-                            ? "border-slate-300 bg-slate-50"
-                            : "border-slate-200 hover:bg-slate-50/50"
+                            ? "border-border bg-muted/40"
+                            : "border-border hover:bg-muted/40"
                         )}
                       >
                         <input
                           type="checkbox"
                           checked={allowedPages.includes(page.key)}
                           onChange={() => toggle(page.key)}
-                          className="size-4 rounded border-slate-300"
+                          className="size-4 rounded border-border"
                           style={{ accentColor: primaryColor }}
                         />
-                        <span className="text-sm font-medium text-slate-800">
+                        <span className="text-sm font-medium text-foreground">
                           {page.label}
                         </span>
                       </label>

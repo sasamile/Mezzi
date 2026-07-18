@@ -104,6 +104,7 @@ export const createPQR = createTool({
       subject,
       description,
       source: "whatsapp",
+      conversationId: conversation._id,
     });
 
     // Obtener el ticket number generado

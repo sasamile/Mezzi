@@ -1,12 +1,14 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRequireModule } from "@/lib/use-require-module";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { Plus, MapPin, Pencil, Trash2, Bot } from "lucide-react";
 import {
   AlertDialog,
@@ -29,7 +31,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const DEFAULT_PRIMARY = "#197fe6";
 const VACANCY_OPTIONS = ["PARRILLERO", "MESERA", "CAJERO", "COCINERO", "AUXILIAR", "ADMINISTRATIVO"];
 
 type JobLocationDoc = {
@@ -83,7 +84,7 @@ export default function TrabajaConNosotrosPage() {
   const updateLocation = useMutation(api.jobLocations.update);
   const removeLocation = useMutation(api.jobLocations.remove);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
 
   const openCreate = () => {
     setForm({
@@ -191,24 +192,24 @@ export default function TrabajaConNosotrosPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando…</p>
+        <p className="text-muted-foreground">Cargando…</p>
       </div>
     );
   }
 
   return (
     <div
-      className="flex min-h-full flex-col overflow-y-auto bg-slate-50"
+      className="flex min-h-full flex-col overflow-y-auto bg-muted/40"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6 sm:p-8 md:p-10">
+      <div className="w-full flex-1 p-4 md:p-6 lg:p-8">
         <header className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Trabaja con Nosotros
               </h1>
-              <p className="mt-2 text-base text-slate-500 sm:text-lg">
+              <p className="mt-2 text-base text-muted-foreground sm:text-lg">
                 Ciudades, sedes y vacantes que el bot usa en WhatsApp
               </p>
             </div>
@@ -232,9 +233,9 @@ export default function TrabajaConNosotrosPage() {
           </p>
         </div>
 
-        <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 mb-6">
+        <div className="flex gap-1 rounded-lg border border-border bg-card p-1 mb-6">
           <div
-            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-slate-100 text-slate-900"
+            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-muted text-foreground"
           >
             <MapPin className="h-4 w-4" />
             Ubicaciones y vacantes
@@ -242,10 +243,10 @@ export default function TrabajaConNosotrosPage() {
         </div>
 
         {activeTab === "ubicaciones" && (
-          <section className="rounded-xl border border-slate-200 bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Ubicaciones por ciudad</h2>
+          <section className="rounded-xl border border-border bg-card p-6">
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Ubicaciones por ciudad</h2>
             {!locations?.length ? (
-              <p className="text-slate-500 py-8 text-center">
+              <p className="text-muted-foreground py-8 text-center">
                 No hay ubicaciones registradas. Agrega ciudades, centros comerciales y vacantes para que el chat pueda responder.
               </p>
             ) : (
@@ -254,22 +255,47 @@ export default function TrabajaConNosotrosPage() {
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([city, locs]) => (
                     <div key={city}>
-                      <h3 className="mb-2 font-medium text-slate-700">{city}</h3>
+                      <h3 className="mb-2 font-medium text-foreground">{city}</h3>
                       <div className="space-y-2">
                         {locs
                           .sort((a, b) => a.mallName.localeCompare(b.mallName))
                           .map((loc) => (
                             <div
                               key={loc._id}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-4 py-3"
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
                             >
-                              <div>
-                                <span className="font-medium text-slate-800">
-                                  {loc.isPrincipal ? `${loc.mallName} (Principal)` : loc.mallName}
-                                </span>
-                                <span className="ml-2 text-sm text-slate-500">
-                                  {loc.vacancies.length ? loc.vacancies.join(", ") : "Sin vacantes específicas"}
-                                </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-foreground">
+                                    {loc.isPrincipal
+                                      ? `${loc.mallName} (Principal)`
+                                      : loc.mallName}
+                                  </span>
+                                  {loc.isPrincipal && (
+                                    <span
+                                      className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                                      style={{ backgroundColor: "var(--primaryColor)" }}
+                                    >
+                                      Principal
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {loc.vacancies.length ? (
+                                    loc.vacancies.map((v) => (
+                                      <span
+                                        key={v}
+                                        className="rounded-md bg-[var(--primarySoft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--primaryColor)]"
+                                      >
+                                        {v}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">
+                                      Sin vacantes específicas
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex gap-2">
                                 <Button
@@ -281,7 +307,7 @@ export default function TrabajaConNosotrosPage() {
                                 </Button>
                                 <Button
                                   variant="outline"
-                                  className="h-8 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                                   onClick={() => setDeleteId(loc._id)}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -320,7 +346,7 @@ export default function TrabajaConNosotrosPage() {
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, cityIsNew: false, city: "" }))}
-                    className="text-sm text-slate-500 hover:text-slate-700"
+                    className="text-sm text-muted-foreground hover:text-foreground"
                   >
                     ← Seleccionar ciudad existente
                   </button>
@@ -383,7 +409,7 @@ export default function TrabajaConNosotrosPage() {
                     className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                       form.vacancies.includes(v)
                         ? "bg-slate-800 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        : "bg-muted text-muted-foreground hover:bg-slate-200"
                     }`}
                   >
                     {v}

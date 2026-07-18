@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useState, useMemo } from "react";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import type { TenantStatus } from "../types/types";
 import { DEFAULT_RESTAURANTE_FORM, type RestauranteFormState } from "../types/types";
 

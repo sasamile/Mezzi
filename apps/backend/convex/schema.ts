@@ -88,6 +88,12 @@ export default defineSchema({
     ),
     /** Páginas que puede ver. undefined = todas según rol. [] = ninguna. */
     allowedPages: v.optional(v.array(v.string())),
+    /**
+     * Carpetas del inbox a las que tiene acceso (ids de conversationFolders como
+     * string, más el sentinel "__unclassified__" para los chats sin clasificar).
+     * undefined = todas las carpetas (compatibilidad). OWNER/ADMIN siempre ven todo.
+     */
+    allowedFolders: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -132,6 +138,11 @@ export default defineSchema({
       v.literal("urgent")
     )),
     assignedTo: v.optional(v.id("users")), // null/undefined = Bot IA, set = humano/agente
+    /**
+     * Carpetas del inbox a las que pertenece la conversación (facturas, RRHH, etc.).
+     * Un chat puede estar en varias a la vez. undefined/[] = sin clasificar.
+     */
+    folderIds: v.optional(v.array(v.id("conversationFolders"))),
     /** ID del job programado para responder (debounce multi-mensaje) */
     pendingJobId: v.optional(v.id("_scheduled_functions")),
     lastMessageAt: v.number(),
@@ -146,6 +157,26 @@ export default defineSchema({
     .index("by_tenant_last_message", ["tenantId", "lastMessageAt"])
     .index("by_tenant_contact", ["tenantId", "externalContactId"])
     .index("by_thread_id", ["threadId"]),
+
+  // Carpetas del inbox por tenant (Facturas, RRHH, Compras, Proveedores…)
+  conversationFolders: defineTable({
+    tenantId: v.id("tenants"),
+    name: v.string(),
+    /** Color hex para el chip/pestaña (ej: "#2563eb") */
+    color: v.optional(v.string()),
+    /** Nombre de ícono lucide (ej: "FileText"); opcional */
+    icon: v.optional(v.string()),
+    /**
+     * Palabras clave para clasificación automática. Si un mensaje entrante
+     * contiene alguna (case/acento-insensible), la conversación se agrega a esta carpeta.
+     */
+    keywords: v.optional(v.array(v.string())),
+    /** Orden de visualización (menor = primero) */
+    order: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"]),
 
   // Mensajes de cada conversación
   messages: defineTable({
@@ -395,6 +426,21 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
     resolutionNotes: v.optional(v.string()),
     ticketNumber: v.optional(v.string()),
+    /**
+     * Adjuntos del chat (factura, RUT, fotos) para el correo de notificación.
+     * Se recogen de mensajes INBOUND con imagen o documento al crear la PQR.
+     */
+    attachments: v.optional(
+      v.array(
+        v.object({
+          url: v.string(),
+          mediaType: v.union(v.literal("image"), v.literal("document")),
+          fileName: v.optional(v.string()),
+          storageId: v.optional(v.id("_storage")),
+        })
+      )
+    ),
+    conversationId: v.optional(v.id("conversations")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -1,12 +1,27 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
 import * as React from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useRequireModule } from "@/lib/use-require-module";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { Plus, Search, MessageSquare, AlertCircle, FileWarning, Lightbulb, Star, Mail, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  MessageSquare,
+  AlertCircle,
+  FileWarning,
+  Lightbulb,
+  Star,
+  Mail,
+  Loader2,
+  Paperclip,
+  ImagePlus,
+  X,
+  FileText,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -25,9 +40,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { sileo } from "sileo";
-
-const DEFAULT_PRIMARY = "#197fe6";
+import { PageHeader, PageSurface } from "@/components/layout/page-chrome";
+import { sileo } from "@/lib/toast";
 
 type PqrType = "petition" | "complaint" | "claim" | "suggestion" | "compliment";
 type PqrStatus = "open" | "in_progress" | "resolved" | "closed";
@@ -55,11 +69,27 @@ const TYPE_ICONS: Record<PqrType, React.ElementType> = {
   compliment: Star,
 };
 
+const fieldClass =
+  "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+const textareaClass =
+  "min-h-[96px] w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+const ACCEPTED =
+  "image/png,image/jpeg,image/webp,image/heic,application/pdf";
+
+type PendingFile = {
+  storageId: Id<"_storage">;
+  mediaType: "image" | "document";
+  fileName: string;
+  previewUrl?: string;
+};
+
 export default function PQRsPage() {
   useRequireModule("pqr");
   const { tenantId } = useTenant();
-  const [statusFilter, setStatusFilter] = React.useState<string>("all");
-  const [typeFilter, setTypeFilter] = React.useState<string>("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [typeFilter, setTypeFilter] = React.useState("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [createOpen, setCreateOpen] = React.useState(false);
   const [detailId, setDetailId] = React.useState<Id<"pqrs"> | null>(null);
@@ -73,6 +103,9 @@ export default function PQRsPage() {
     subject: "",
     description: "",
   });
+  const [pendingFiles, setPendingFiles] = React.useState<PendingFile[]>([]);
+  const [uploading, setUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [resolutionNotes, setResolutionNotes] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [resending, setResending] = React.useState(false);
@@ -92,10 +125,11 @@ export default function PQRsPage() {
   const createPqr = useMutation(api.pqrs.create);
   const updatePqr = useMutation(api.pqrs.update);
   const removePqr = useMutation(api.pqrs.remove);
+  const generateUploadUrl = useMutation(api.pqrs.generateAttachmentUploadUrl);
   const resendNotificationEmail = useAction(api.pqrs.resendNotificationEmail);
   const detailPqr = detailId ? pqrs?.find((p) => p._id === detailId) : null;
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
 
   const filtered = React.useMemo(() => {
     const list = pqrs ?? [];
@@ -109,6 +143,73 @@ export default function PQRsPage() {
     );
   }, [pqrs, searchQuery]);
 
+  const resetForm = () => {
+    setForm({
+      type: "petition",
+      anonymous: false,
+      customerName: "",
+      customerEmail: "",
+      customerPhone: "",
+      subject: "",
+      description: "",
+    });
+    setPendingFiles([]);
+  };
+
+  const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    if (pendingFiles.length + files.length > 5) {
+      sileo.error({
+        title: "Límite de archivos",
+        description: "Puedes adjuntar hasta 5 archivos.",
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const next: PendingFile[] = [];
+      for (const file of files) {
+        const isPdf = file.type === "application/pdf";
+        const isImage = file.type.startsWith("image/");
+        if (!isPdf && !isImage) {
+          sileo.error({
+            title: "Formato no válido",
+            description: `${file.name}: usa imagen o PDF.`,
+          });
+          continue;
+        }
+        const uploadUrl = await generateUploadUrl();
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error(`No se pudo subir ${file.name}`);
+        const { storageId } = (await res.json()) as {
+          storageId: Id<"_storage">;
+        };
+        next.push({
+          storageId,
+          mediaType: isPdf ? "document" : "image",
+          fileName: file.name,
+          previewUrl: isImage ? URL.createObjectURL(file) : undefined,
+        });
+      }
+      setPendingFiles((prev) => [...prev, ...next]);
+    } catch (err) {
+      sileo.error({
+        title: "Error al subir",
+        description:
+          err instanceof Error ? err.message : "No se pudieron subir los archivos.",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
@@ -119,15 +220,25 @@ export default function PQRsPage() {
       await createPqr({
         tenantId,
         type: form.type,
-        customerName: form.anonymous ? undefined : form.customerName.trim() || undefined,
+        customerName: form.anonymous
+          ? undefined
+          : form.customerName.trim() || undefined,
         customerEmail: form.customerEmail.trim() || undefined,
         customerPhone: form.customerPhone.trim() || undefined,
         subject: form.subject.trim(),
         description: form.description.trim(),
         source: "web",
+        uploadedAttachments:
+          pendingFiles.length > 0
+            ? pendingFiles.map((f) => ({
+                storageId: f.storageId,
+                mediaType: f.mediaType,
+                fileName: f.fileName,
+              }))
+            : undefined,
       });
       setCreateOpen(false);
-      setForm({ type: "petition", anonymous: false, customerName: "", customerEmail: "", customerPhone: "", subject: "", description: "" });
+      resetForm();
       sileo.success({
         title: "PQR registrada",
         description: "Se notificará por correo al área correspondiente.",
@@ -135,7 +246,8 @@ export default function PQRsPage() {
     } catch (err) {
       sileo.error({
         title: "Error al crear",
-        description: err instanceof Error ? err.message : "No se pudo crear la PQR.",
+        description:
+          err instanceof Error ? err.message : "No se pudo crear la PQR.",
       });
     } finally {
       setSaving(false);
@@ -145,9 +257,7 @@ export default function PQRsPage() {
   const handleStatusChange = async (pqrId: Id<"pqrs">, status: PqrStatus) => {
     try {
       await updatePqr({ pqrId, status });
-      if (status === "resolved" || status === "closed") {
-        setDetailId(null);
-      }
+      if (status === "resolved" || status === "closed") setDetailId(null);
       sileo.success({
         title: "Estado actualizado",
         description: `PQR marcada como ${STATUS_LABELS[status].toLowerCase()}.`,
@@ -155,7 +265,8 @@ export default function PQRsPage() {
     } catch (err) {
       sileo.error({
         title: "Error",
-        description: err instanceof Error ? err.message : "No se pudo actualizar.",
+        description:
+          err instanceof Error ? err.message : "No se pudo actualizar.",
       });
     }
   };
@@ -164,7 +275,11 @@ export default function PQRsPage() {
     if (!detailId) return;
     setSaving(true);
     try {
-      await updatePqr({ pqrId: detailId, status: "resolved", resolutionNotes: resolutionNotes.trim() || undefined });
+      await updatePqr({
+        pqrId: detailId,
+        status: "resolved",
+        resolutionNotes: resolutionNotes.trim() || undefined,
+      });
       setDetailId(null);
       setResolutionNotes("");
       sileo.success({
@@ -174,7 +289,8 @@ export default function PQRsPage() {
     } catch (err) {
       sileo.error({
         title: "Error",
-        description: err instanceof Error ? err.message : "No se pudo resolver.",
+        description:
+          err instanceof Error ? err.message : "No se pudo resolver.",
       });
     } finally {
       setSaving(false);
@@ -199,173 +315,183 @@ export default function PQRsPage() {
     try {
       const result = await resendNotificationEmail({ pqrId: detailId });
       if (result.ok) {
-        const ccNote =
-          result.cc.length > 0 ? ` (con copia a ${result.cc.join(", ")})` : "";
-        const msg = `Correo reenviado a ${result.to.join(", ")}${ccNote}`;
-        setResendMessage(msg);
-        sileo.success({
-          title: "Correo reenviado",
-          description: msg,
-        });
+        setResendMessage(
+          `Correo reenviado a ${result.to.join(", ")}${result.cc.length ? ` (CC: ${result.cc.join(", ")})` : ""}`
+        );
+        sileo.success({ title: "Correo reenviado" });
       } else {
-        const errMsg = result.error ?? "No se pudo reenviar el correo";
-        setResendMessage(errMsg);
-        sileo.error({ title: "Error al reenviar", description: errMsg });
+        setResendMessage(result.error);
+        sileo.error({ title: "No se pudo reenviar", description: result.error });
       }
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Error al reenviar";
-      setResendMessage(errMsg);
-      sileo.error({ title: "Error al reenviar", description: errMsg });
+      const msg = err instanceof Error ? err.message : "Error al reenviar";
+      setResendMessage(msg);
+      sileo.error({ title: "Error", description: msg });
     } finally {
       setResending(false);
     }
   };
 
-  React.useEffect(() => {
-    if (!detailId) {
-      setResendMessage(null);
-    }
-  }, [detailId]);
-
-  if (!tenantId) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando…</p>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className="flex min-h-full flex-col overflow-y-auto bg-slate-50"
-      style={{ "--primaryColor": primaryColor } as React.CSSProperties}
-    >
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6 sm:p-8 md:p-10">
-        <header className="mb-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                PQRs
-              </h1>
-              <p className="mt-2 text-base text-slate-500 sm:text-lg">
-                Peticiones, Quejas y Reclamos de clientes
-              </p>
-              <p className="mt-2 text-sm font-medium text-slate-600">
-                {pqrs?.length ?? 0} registro{(pqrs?.length ?? 0) !== 1 ? "s" : ""}
-              </p>
-            </div>
+    <PageSurface className="bg-muted/30">
+      <div className="mx-auto w-full max-w-5xl">
+        <PageHeader
+          title="PQRs"
+          description="Peticiones, quejas y reclamos de clientes."
+          actions={
             <button
               type="button"
-              onClick={() => setCreateOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
+              onClick={() => {
+                resetForm();
+                setCreateOpen(true);
+              }}
+              className="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: primaryColor }}
             >
-              <Plus className="size-5" strokeWidth={2} />
+              <Plus size={16} strokeWidth={2} />
               Nuevo PQR
             </button>
-          </div>
-        </header>
+          }
+        />
 
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-sm flex-1">
+            <Search
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              strokeWidth={1.7}
+            />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar cliente o asunto…"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className={cn(fieldClass, "pl-9")}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-2">
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className={cn(fieldClass, "w-auto")}
             >
               <option value="all">Todos los tipos</option>
               {(["petition", "complaint", "claim"] as const).map((t) => (
-                <option key={t} value={t}>{TYPE_LABELS[t]}</option>
+                <option key={t} value={t}>
+                  {TYPE_LABELS[t]}
+                </option>
               ))}
             </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className={cn(fieldClass, "w-auto")}
             >
               <option value="all">Todos los estados</option>
-              {(["open", "in_progress", "resolved", "closed"] as const).map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+              {(
+                ["open", "in_progress", "resolved", "closed"] as const
+              ).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
               ))}
             </select>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Lista de PQRs</h2>
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-5 py-3">
+            <h2 className="text-sm font-semibold text-foreground">
+              Lista de PQRs
+            </h2>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {filtered.length} registro{filtered.length !== 1 ? "s" : ""}
+            </span>
           </div>
-          <div className="divide-y divide-slate-100">
+
+          <div className="divide-y divide-border">
             {pqrs === undefined ? (
-              <div className="py-12 text-center text-sm text-slate-500">Cargando…</div>
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Cargando…
+              </div>
             ) : filtered.length === 0 ? (
-              <div className="py-16 text-center">
-                <MessageSquare className="mx-auto size-12 text-slate-300" strokeWidth={1.5} />
-                <p className="mt-4 text-sm font-medium text-slate-600">No hay PQRs</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Registra peticiones, quejas o reclamos de tus clientes
+              <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+                <MessageSquare
+                  className="size-10 text-muted-foreground/50"
+                  strokeWidth={1.5}
+                />
+                <p className="text-sm font-medium text-foreground">
+                  No hay PQRs
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Registra peticiones, quejas o reclamos de tus clientes.
                 </p>
                 <button
                   type="button"
                   onClick={() => setCreateOpen(true)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+                  className="mt-2 inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-white"
                   style={{ backgroundColor: primaryColor }}
                 >
-                  <Plus className="size-4" /> Nuevo PQR
+                  <Plus size={14} /> Nuevo PQR
                 </button>
               </div>
             ) : (
               filtered.map((p) => {
                 const Icon = TYPE_ICONS[p.type];
+                const hasFiles = (p.attachments?.length ?? 0) > 0;
                 return (
                   <div
                     key={p._id}
-                    className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/80 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div
                       className="min-w-0 flex-1 cursor-pointer"
                       onClick={() => setDetailId(p._id)}
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <Icon className="size-4 text-slate-500" strokeWidth={2} />
-                        <span className="font-semibold text-slate-900">{p.customerName}</span>
+                        <Icon
+                          className="size-4 text-muted-foreground"
+                          strokeWidth={1.7}
+                        />
+                        <span className="text-sm font-semibold text-foreground">
+                          {p.customerName}
+                        </span>
                         <span
                           className={cn(
-                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                            p.type === "petition" && "bg-blue-100 text-blue-800",
-                            p.type === "complaint" && "bg-amber-100 text-amber-800",
-                            p.type === "claim" && "bg-rose-100 text-rose-800",
-                            p.type === "suggestion" && "bg-violet-100 text-violet-800",
-                            p.type === "compliment" && "bg-emerald-100 text-emerald-800"
+                            "rounded-md px-2 py-0.5 text-[11px] font-medium",
+                            p.type === "petition" &&
+                              "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+                            p.type === "complaint" &&
+                              "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+                            p.type === "claim" &&
+                              "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+                            p.type === "suggestion" &&
+                              "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+                            p.type === "compliment" &&
+                              "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                           )}
                         >
                           {TYPE_LABELS[p.type]}
                         </span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                            p.status === "open" && "bg-slate-100 text-slate-700",
-                            p.status === "in_progress" && "bg-cyan-100 text-cyan-800",
-                            p.status === "resolved" && "bg-emerald-100 text-emerald-800",
-                            p.status === "closed" && "bg-slate-100 text-slate-600"
-                          )}
-                        >
+                        <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {STATUS_LABELS[p.status]}
                         </span>
+                        {hasFiles && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                            title="Con adjuntos"
+                          >
+                            <Paperclip size={11} strokeWidth={2} />
+                            {p.attachments!.length}
+                          </span>
+                        )}
                       </div>
-                      <p className="mt-1 text-sm font-medium text-slate-700">{p.subject}</p>
-                      <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{p.description}</p>
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        {p.subject}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                        {p.description}
+                      </p>
+                      <p className="mt-1.5 text-xs text-muted-foreground">
                         {new Date(p.createdAt).toLocaleDateString("es-ES", {
                           day: "numeric",
                           month: "short",
@@ -375,18 +501,18 @@ export default function PQRsPage() {
                         })}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setDetailId(p._id)}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="h-8 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                       >
                         Ver detalle
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeleteId(p._id)}
-                        className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                        className="h-8 rounded-lg border border-destructive/25 bg-destructive/5 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         Eliminar
                       </button>
@@ -396,111 +522,231 @@ export default function PQRsPage() {
               })
             )}
           </div>
-        </div>
+        </section>
       </div>
 
       {/* Modal crear */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md border-slate-200 bg-white sm:max-w-lg">
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto border-border bg-card sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Nuevo PQR</DialogTitle>
+            <DialogTitle>Nuevo PQR</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Puedes adjuntar una foto o PDF de forma opcional.
+            </p>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Tipo *</label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as PqrType }))}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
-              >
-                {(["petition", "complaint", "claim"] as const).map((t) => (
-                  <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="pqr-anonymous"
-                checked={form.anonymous}
-                onChange={(e) => setForm((f) => ({ ...f, anonymous: e.target.checked }))}
-                className="rounded border-slate-300"
-              />
-              <label htmlFor="pqr-anonymous" className="text-sm font-medium text-slate-700">
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-foreground">
+                  Tipo *
+                </label>
+                <select
+                  value={form.type}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      type: e.target.value as PqrType,
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  {(["petition", "complaint", "claim"] as const).map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.anonymous}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, anonymous: e.target.checked }))
+                  }
+                  className="size-4 rounded border-border"
+                />
                 PQR anónima
               </label>
             </div>
+
             {!form.anonymous && (
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Nombre del cliente *</label>
-                <input
-                  type="text"
-                  required
-                  value={form.customerName}
-                  onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
-                  placeholder="Ej. Juan Pérez"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Nombre del cliente *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.customerName}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, customerName: e.target.value }))
+                    }
+                    placeholder="Ej. Juan Pérez"
+                    className={fieldClass}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={form.customerEmail}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          customerEmail: e.target.value,
+                        }))
+                      }
+                      placeholder="cliente@email.com"
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      value={form.customerPhone}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          customerPhone: e.target.value,
+                        }))
+                      }
+                      placeholder="+57 300…"
+                      className={fieldClass}
+                    />
+                  </div>
+                </div>
               </div>
             )}
-            {!form.anonymous && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-                <input
-                  type="email"
-                  value={form.customerEmail}
-                  onChange={(e) => setForm((f) => ({ ...f, customerEmail: e.target.value }))}
-                  placeholder="cliente@email.com"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                <input
-                  type="tel"
-                  value={form.customerPhone}
-                  onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))}
-                  placeholder="+57 300 123 4567"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
-                />
-              </div>
-            </div>
-            )}
+
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Asunto *</label>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">
+                Asunto *
+              </label>
               <input
                 type="text"
                 required
                 value={form.subject}
-                onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, subject: e.target.value }))
+                }
                 placeholder="Resumen del PQR"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className={fieldClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Descripción *</label>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">
+                Descripción *
+              </label>
               <textarea
                 required
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Detalle completo del petición, queja o reclamo..."
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="Detalle de la petición, queja o reclamo…"
                 rows={4}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className={textareaClass}
               />
             </div>
-            <DialogFooter className="gap-2 pt-4">
+
+            {/* Adjuntos opcionales */}
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Evidencia (opcional)
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Foto de factura, RUT u otro PDF. Hasta 5 archivos.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || pendingFiles.length >= 5}
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ImagePlus size={14} strokeWidth={1.7} />
+                  )}
+                  {uploading ? "Subiendo…" : "Adjuntar"}
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED}
+                multiple
+                className="sr-only"
+                onChange={handleFilePick}
+              />
+              {pendingFiles.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {pendingFiles.map((f) => (
+                    <li
+                      key={f.storageId}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-2"
+                    >
+                      {f.previewUrl ? (
+                        <img
+                          src={f.previewUrl}
+                          alt=""
+                          className="size-9 rounded-md object-cover"
+                        />
+                      ) : (
+                        <span className="grid size-9 place-items-center rounded-md bg-muted text-muted-foreground">
+                          <FileText size={16} strokeWidth={1.7} />
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                        {f.fileName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPendingFiles((prev) =>
+                            prev.filter((x) => x.storageId !== f.storageId)
+                          )
+                        }
+                        className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Quitar archivo"
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 border-t border-border pt-4">
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="h-10 rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={saving}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+                disabled={saving || uploading}
+                className="h-10 rounded-lg px-4 text-sm font-medium text-white disabled:opacity-50"
                 style={{ backgroundColor: primaryColor }}
               >
                 {saving ? "Creando…" : "Crear PQR"}
@@ -511,76 +757,139 @@ export default function PQRsPage() {
       </Dialog>
 
       {/* Modal detalle */}
-      <Dialog open={!!detailId} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DialogContent className="max-w-md border-slate-200 bg-white sm:max-w-lg">
+      <Dialog
+        open={!!detailId}
+        onOpenChange={(open) => !open && setDetailId(null)}
+      >
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto border-border bg-card sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Detalle del PQR</DialogTitle>
+            <DialogTitle>Detalle del PQR</DialogTitle>
           </DialogHeader>
           {detailPqr && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium",
-                    detailPqr.type === "petition" && "bg-blue-100 text-blue-800",
-                    detailPqr.type === "complaint" && "bg-amber-100 text-amber-800",
-                    detailPqr.type === "claim" && "bg-rose-100 text-rose-800",
-                    detailPqr.type === "suggestion" && "bg-violet-100 text-violet-800",
-                    detailPqr.type === "compliment" && "bg-emerald-100 text-emerald-800"
+                    "rounded-md px-2.5 py-1 text-xs font-medium",
+                    detailPqr.type === "petition" &&
+                      "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+                    detailPqr.type === "complaint" &&
+                      "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+                    detailPqr.type === "claim" &&
+                      "bg-rose-500/15 text-rose-700 dark:text-rose-300"
                   )}
                 >
                   {TYPE_LABELS[detailPqr.type]}
                 </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium",
-                    detailPqr.status === "open" && "bg-slate-100 text-slate-700",
-                    detailPqr.status === "in_progress" && "bg-cyan-100 text-cyan-800",
-                    detailPqr.status === "resolved" && "bg-emerald-100 text-emerald-800",
-                    detailPqr.status === "closed" && "bg-slate-100 text-slate-600"
-                  )}
-                >
+                <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   {STATUS_LABELS[detailPqr.status]}
                 </span>
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-500">Cliente</p>
-                <p className="font-semibold text-slate-900">{detailPqr.customerName}</p>
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Cliente
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {detailPqr.customerName}
+                </p>
                 {detailPqr.customerEmail && (
-                  <p className="text-sm text-slate-600">{detailPqr.customerEmail}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {detailPqr.customerEmail}
+                  </p>
                 )}
                 {detailPqr.customerPhone && (
-                  <a href={`tel:${detailPqr.customerPhone}`} className="text-sm text-slate-600 hover:underline">
+                  <a
+                    href={`tel:${detailPqr.customerPhone}`}
+                    className="text-sm text-muted-foreground hover:underline"
+                  >
                     {detailPqr.customerPhone}
                   </a>
                 )}
               </div>
+
               <div>
-                <p className="text-sm font-medium text-slate-500">Asunto</p>
-                <p className="font-semibold text-slate-900">{detailPqr.subject}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Asunto
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {detailPqr.subject}
+                </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500">Descripción</p>
-                <p className="text-sm text-slate-700 whitespace-pre-wrap">{detailPqr.description}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Descripción
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {detailPqr.description}
+                </p>
               </div>
-              {detailPqr.resolutionNotes && (
+
+              {(detailPqr.attachments?.length ?? 0) > 0 && (
                 <div>
-                  <p className="text-sm font-medium text-slate-500">Notas de resolución</p>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{detailPqr.resolutionNotes}</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Adjuntos
+                  </p>
+                  <ul className="space-y-2">
+                    {detailPqr.attachments!.map((a, i) => (
+                      <li key={`${a.url}-${i}`}>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+                        >
+                          {a.mediaType === "image" ? (
+                            <img
+                              src={a.url}
+                              alt=""
+                              className="size-10 rounded-md object-cover"
+                            />
+                          ) : (
+                            <span className="grid size-10 place-items-center rounded-md bg-background text-muted-foreground">
+                              <FileText size={16} />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate">
+                            {a.fileName ??
+                              (a.mediaType === "image" ? "Imagen" : "Documento")}
+                          </span>
+                          <Paperclip
+                            size={14}
+                            className="shrink-0 text-muted-foreground"
+                          />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-sm font-medium text-slate-700">Notificación por correo</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Reenvía al área correspondiente. Si el cliente tiene email, recibe copia (CC).
+
+              {detailPqr.resolutionNotes && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Notas de resolución
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm text-foreground">
+                    {detailPqr.resolutionNotes}
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <p className="text-sm font-medium text-foreground">
+                  Notificación por correo
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Reenvía al área correspondiente. Incluye adjuntos si hay.
                 </p>
                 {resendMessage && (
                   <p
                     className={cn(
                       "mt-2 text-xs",
                       resendMessage.startsWith("Correo reenviado")
-                        ? "text-emerald-700"
-                        : "text-rose-700"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-destructive"
                     )}
                   >
                     {resendMessage}
@@ -590,33 +899,39 @@ export default function PQRsPage() {
                   type="button"
                   onClick={handleResendEmail}
                   disabled={resending}
-                  className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
                 >
                   {resending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <Mail className="size-4" strokeWidth={2} />
+                    <Mail className="size-4" strokeWidth={1.7} />
                   )}
                   {resending ? "Reenviando…" : "Reenviar correo"}
                 </button>
               </div>
-              {detailPqr.status === "open" || detailPqr.status === "in_progress" ? (
+
+              {(detailPqr.status === "open" ||
+                detailPqr.status === "in_progress") && (
                 <>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Notas de resolución</label>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      Notas de resolución
+                    </label>
                     <textarea
                       value={resolutionNotes}
                       onChange={(e) => setResolutionNotes(e.target.value)}
-                      placeholder="Describa cómo se resolvió..."
+                      placeholder="Cómo se resolvió…"
                       rows={3}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                      className={textareaClass}
                     />
                   </div>
-                  <div className="flex flex-wrap gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => handleStatusChange(detailPqr._id, "in_progress")}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={() =>
+                        handleStatusChange(detailPqr._id, "in_progress")
+                      }
+                      className="h-9 rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
                     >
                       En proceso
                     </button>
@@ -624,41 +939,50 @@ export default function PQRsPage() {
                       type="button"
                       onClick={handleResolve}
                       disabled={saving}
-                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                      className="h-9 rounded-lg bg-emerald-600/15 px-3 text-sm font-medium text-emerald-700 hover:bg-emerald-600/25 disabled:opacity-50 dark:text-emerald-400"
                     >
                       Resolver
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleStatusChange(detailPqr._id, "closed")}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={() =>
+                        handleStatusChange(detailPqr._id, "closed")
+                      }
+                      className="h-9 rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
                     >
                       Cerrar
                     </button>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar PQR?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. El registro se eliminará permanentemente.
+              Esta acción no se puede deshacer. El registro se eliminará
+              permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageSurface>
   );
 }

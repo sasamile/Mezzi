@@ -1,21 +1,23 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
-type ButtonVariant = "default" | "outline" | "ghost";
+type ButtonVariant = "default" | "outline" | "ghost" | "destructive";
 
 const baseClasses =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 px-4 py-2";
+  "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60";
 
 export const buttonVariants = (props?: { variant?: ButtonVariant }) => {
   const variant = props?.variant ?? "default";
   const variants: Record<ButtonVariant, string> = {
     default:
-      "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600 ring-offset-red-50",
+      "bg-primary text-primary-foreground hover:opacity-90",
     outline:
-      "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 ring-offset-white",
-    ghost:
-      "bg-transparent text-zinc-900 hover:bg-zinc-100 ring-offset-white",
+      "border border-border bg-background text-foreground hover:bg-muted",
+    ghost: "bg-transparent text-foreground hover:bg-muted",
+    destructive:
+      "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   };
   return `${baseClasses} ${variants[variant]}`;
 };
@@ -32,9 +34,8 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={buttonVariants({ variant }) + (className ? ` ${className}` : "")}
+      className={cn(buttonVariants({ variant }), className)}
       {...props}
     />
   );
 }
-

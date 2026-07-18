@@ -1,5 +1,43 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+
+/** Sentinel de acceso a chats sin clasificar (ver conversationFolders.UNCLASSIFIED). */
+const UNCLASSIFIED = "__unclassified__";
+
+/**
+ * Filtra una lista de conversaciones según los permisos de carpeta del usuario.
+ * - Sin userId, sin membresía, rol OWNER/ADMIN o allowedFolders undefined → ve todo.
+ * - En otro caso: solo chats cuyas carpetas intersecten allowedFolders, más los
+ *   "sin clasificar" si allowedFolders incluye el sentinel UNCLASSIFIED.
+ */
+async function filterByFolderAccess(
+  ctx: QueryCtx,
+  tenantId: Id<"tenants">,
+  userId: Id<"users"> | undefined,
+  conversations: Doc<"conversations">[]
+): Promise<Doc<"conversations">[]> {
+  if (!userId) return conversations;
+  const membership = await ctx.db
+    .query("userTenants")
+    .withIndex("by_user_tenant", (q) =>
+      q.eq("userId", userId).eq("tenantId", tenantId)
+    )
+    .unique();
+  if (!membership) return conversations;
+  if (membership.role === "OWNER" || membership.role === "ADMIN")
+    return conversations;
+  const allowed = membership.allowedFolders;
+  if (!allowed) return conversations; // undefined = todas (compatibilidad)
+  const allowedSet = new Set(allowed);
+  const canSeeUnclassified = allowedSet.has(UNCLASSIFIED);
+  return conversations.filter((c) => {
+    const folders = c.folderIds ?? [];
+    if (folders.length === 0) return canSeeUnclassified;
+    return folders.some((id) => allowedSet.has(String(id)));
+  });
+}
 
 const channelValidator = v.union(
   v.literal("whatsapp"),
@@ -19,24 +57,38 @@ const priorityValidator = v.union(
 );
 
 export const listByTenant = query({
-  args: { tenantId: v.id("tenants") },
+  args: {
+    tenantId: v.id("tenants"),
+    /** Si se pasa, filtra según los permisos de carpeta del usuario. */
+    userId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const all = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_last_message", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
       .collect();
+    return await filterByFolderAccess(ctx, args.tenantId, args.userId, all);
   },
 });
 
 export const countNeedingAttention = query({
-  args: { tenantId: v.id("tenants") },
+  args: {
+    tenantId: v.id("tenants"),
+    userId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
     const all = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_last_message", (q) => q.eq("tenantId", args.tenantId))
       .collect();
-    return all.filter((c) => c.status === "pending").length;
+    const visible = await filterByFolderAccess(
+      ctx,
+      args.tenantId,
+      args.userId,
+      all
+    );
+    return visible.filter((c) => c.status === "pending").length;
   },
 });
 

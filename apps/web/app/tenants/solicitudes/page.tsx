@@ -1,5 +1,7 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRequireModule } from "@/lib/use-require-module";
@@ -26,7 +28,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const DEFAULT_PRIMARY = "#197fe6";
 
 type RequestStatus = "pending" | "sent" | "cancelled";
 
@@ -91,7 +92,7 @@ export default function SolicitudesPage() {
   const updateRequest = useMutation(api.requests.update);
   const removeRequest = useMutation(api.requests.remove);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
 
   const filtered = React.useMemo(() => {
     const list = requests ?? [];
@@ -238,27 +239,27 @@ export default function SolicitudesPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando…</p>
+        <p className="text-muted-foreground">Cargando…</p>
       </div>
     );
   }
 
   return (
     <div
-      className="flex min-h-full flex-col overflow-y-auto bg-slate-50"
+      className="flex min-h-full flex-col overflow-y-auto bg-muted/40"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6 sm:p-8 md:p-10">
+      <div className="w-full flex-1 p-4 md:p-6 lg:p-8">
         <header className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Pedidos
               </h1>
-              <p className="mt-2 text-base text-slate-500 sm:text-lg">
+              <p className="mt-2 text-base text-muted-foreground sm:text-lg">
                 Productos del menú; al marcar Enviado se notifica al cliente por WhatsApp
               </p>
-              <p className="mt-2 text-sm font-medium text-slate-600">
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
                 {requests?.length ?? 0} pedido{(requests?.length ?? 0) !== 1 ? "s" : ""}
               </p>
             </div>
@@ -279,19 +280,19 @@ export default function SolicitudesPage() {
 
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por distribuidor, producto, cliente, dirección…"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
           >
             <option value="all">Todos</option>
             <option value="pending">Pendiente</option>
@@ -300,18 +301,18 @@ export default function SolicitudesPage() {
           </select>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Lista de pedidos</h2>
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="border-b border-border px-5 py-3">
+            <h2 className="text-sm font-semibold text-foreground">Lista de pedidos</h2>
           </div>
           <div className="divide-y divide-slate-100">
             {requests === undefined ? (
-              <div className="py-12 text-center text-sm text-slate-500">Cargando…</div>
+              <div className="py-12 text-center text-sm text-muted-foreground">Cargando…</div>
             ) : filtered.length === 0 ? (
               <div className="py-16 text-center">
                 <Truck className="mx-auto size-12 text-slate-300" strokeWidth={1.5} />
-                <p className="mt-4 text-sm font-medium text-slate-600">No hay pedidos</p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-4 text-sm font-medium text-muted-foreground">No hay pedidos</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   Crea un pedido; los productos pueden venir del menú en la base de conocimiento
                 </p>
                 <button
@@ -329,35 +330,35 @@ export default function SolicitudesPage() {
                 return (
                   <div
                     key={r._id}
-                    className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/80 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 px-5 py-4 transition hover:bg-muted/40/80 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-slate-900">{r.distributorName}</span>
+                        <span className="font-semibold text-foreground">{r.distributorName}</span>
                         <span
                           className={cn(
                             "rounded-full px-2.5 py-0.5 text-xs font-medium",
                             r.status === "pending" && "bg-amber-100 text-amber-800",
                             r.status === "sent" && "bg-blue-100 text-blue-800",
-                            r.status === "cancelled" && "bg-slate-100 text-slate-500 line-through",
-                            r.status === "delivered" && "bg-slate-100 text-slate-600"
+                            r.status === "cancelled" && "bg-muted text-muted-foreground line-through",
+                            r.status === "delivered" && "bg-muted text-muted-foreground"
                           )}
                         >
                           {r.status === "pending" ? "Pendiente" : r.status === "sent" ? "Despachado" : r.status === "cancelled" ? "Cancelado" : r.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {items.length > 0
                           ? items.map((i) => `${i.product} (${i.quantity} ${i.unit ?? "uds"})`).join(", ")
                           : "Sin detalle"}
                         {r.notes ? ` · ${r.notes}` : ""}
                       </p>
-                      <p className="mt-1 text-xs text-slate-600">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {r.customerName}
                         {r.recipientName ? ` · Recibe: ${r.recipientName}` : ""}
                         {r.address ? ` · ${r.address}` : ""}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {new Date(r.requestedAt).toLocaleDateString("es-ES", {
                           day: "numeric",
                           month: "short",
@@ -376,7 +377,7 @@ export default function SolicitudesPage() {
                             updateRequest({ requestId: r._id, status: v as "pending" | "sent" | "cancelled" });
                           }
                         }}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
+                        className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs text-foreground"
                       >
                         <option value="pending">Pendiente</option>
                         <option value="sent">Despachado</option>
@@ -385,7 +386,7 @@ export default function SolicitudesPage() {
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/40"
                       >
                         Editar
                       </button>
@@ -407,69 +408,69 @@ export default function SolicitudesPage() {
 
       {/* Modal crear */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-<DialogContent className="max-w-lg border-slate-200 bg-white">
+<DialogContent className="max-w-lg border-border bg-card">
         <DialogHeader>
-            <DialogTitle className="text-slate-900">Nuevo pedido</DialogTitle>
+            <DialogTitle className="text-foreground">Nuevo pedido</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4" noValidate>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Distribuidor / Origen *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Distribuidor / Origen *</label>
               <input
                 type="text"
                 required
                 value={form.distributorName}
                 onChange={(e) => setForm((f) => ({ ...f, distributorName: e.target.value }))}
                 placeholder="Ej. Coca-Cola, Bavaria"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Cliente (nombre) *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Cliente (nombre) *</label>
               <input
                 type="text"
                 required
                 value={form.customerName}
                 onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
                 placeholder="Nombre del cliente"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono cliente (para notificar) *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Teléfono cliente (para notificar) *</label>
               <input
                 type="text"
                 required
                 value={form.customerPhone}
                 onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))}
                 placeholder="+57 300 123 4567"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Dirección de entrega *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Dirección de entrega *</label>
               <input
                 type="text"
                 required
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                 placeholder="Calle 123, ciudad"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Quién recibe *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Quién recibe *</label>
               <input
                 type="text"
                 required
                 value={form.recipientName}
                 onChange={(e) => setForm((f) => ({ ...f, recipientName: e.target.value }))}
                 placeholder="Nombre de quien recibe"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Productos *</label>
-              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+              <label className="mb-2 block text-sm font-medium text-foreground">Productos *</label>
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40/50 p-3">
                 {form.productLines.map((line, index) => (
                   <div key={index} className="flex flex-wrap items-center gap-2">
                     <input
@@ -477,7 +478,7 @@ export default function SolicitudesPage() {
                       value={line.product}
                       onChange={(e) => setProductLine(index, "product", e.target.value)}
                       placeholder="Producto"
-                      className="min-w-[120px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      className="min-w-[120px] flex-1 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <input
                       type="text"
@@ -485,19 +486,19 @@ export default function SolicitudesPage() {
                       value={line.quantity}
                       onChange={(e) => setProductLine(index, "quantity", e.target.value)}
                       placeholder="Cant."
-                      className="w-16 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 text-center"
+                      className="w-16 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground text-center"
                     />
                     <input
                       type="text"
                       value={line.unit}
                       onChange={(e) => setProductLine(index, "unit", e.target.value)}
                       placeholder="Unidad"
-                      className="w-20 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      className="w-20 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <button
                       type="button"
                       onClick={() => removeProductLine(index)}
-                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                      className="rounded-lg p-2 text-muted-foreground hover:bg-slate-200 hover:text-foreground"
                       title="Quitar línea"
                     >
                       <Trash2 className="size-4" />
@@ -507,30 +508,30 @@ export default function SolicitudesPage() {
                 <button
                   type="button"
                   onClick={addProductLine}
-                  className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                  className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   <Plus className="size-4" /> Añadir producto
                 </button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Al menos un producto con cantidad. El bot del inbox también puede crear pedidos.
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Notas (observaciones)</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Notas (observaciones)</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 placeholder="Ej. Sin cebolla, sin picante, instrucciones especiales, alergias..."
                 rows={2}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <DialogFooter className="gap-2 pt-4">
               <button
                 type="button"
                 onClick={() => setCreateOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/40"
               >
                 Cancelar
               </button>
@@ -549,68 +550,68 @@ export default function SolicitudesPage() {
 
       {/* Modal editar */}
       <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
-<DialogContent className="max-w-lg border-slate-200 bg-white">
+<DialogContent className="max-w-lg border-border bg-card">
         <DialogHeader>
-            <DialogTitle className="text-slate-900">Editar pedido</DialogTitle>
+            <DialogTitle className="text-foreground">Editar pedido</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdate} className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Distribuidor / Origen *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Distribuidor / Origen *</label>
               <input
                 type="text"
                 required
                 value={form.distributorName}
                 onChange={(e) => setForm((f) => ({ ...f, distributorName: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Cliente (nombre) *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Cliente (nombre) *</label>
               <input
                 type="text"
                 required
                 value={form.customerName}
                 onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
                 placeholder="Nombre del cliente"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono cliente (para notificar) *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Teléfono cliente (para notificar) *</label>
               <input
                 type="text"
                 required
                 value={form.customerPhone}
                 onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))}
                 placeholder="+57 300 123 4567"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Dirección de entrega *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Dirección de entrega *</label>
               <input
                 type="text"
                 required
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                 placeholder="Calle 123, ciudad"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Quién recibe *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Quién recibe *</label>
               <input
                 type="text"
                 required
                 value={form.recipientName}
                 onChange={(e) => setForm((f) => ({ ...f, recipientName: e.target.value }))}
                 placeholder="Nombre de quien recibe"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Productos *</label>
-              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+              <label className="mb-2 block text-sm font-medium text-foreground">Productos *</label>
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40/50 p-3">
                 {form.productLines.map((line, index) => (
                   <div key={index} className="flex flex-wrap items-center gap-2">
                     <input
@@ -618,7 +619,7 @@ export default function SolicitudesPage() {
                       value={line.product}
                       onChange={(e) => setProductLine(index, "product", e.target.value)}
                       placeholder="Producto"
-                      className="min-w-[120px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      className="min-w-[120px] flex-1 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <input
                       type="text"
@@ -626,19 +627,19 @@ export default function SolicitudesPage() {
                       value={line.quantity}
                       onChange={(e) => setProductLine(index, "quantity", e.target.value)}
                       placeholder="Cant."
-                      className="w-16 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 text-center"
+                      className="w-16 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground text-center"
                     />
                     <input
                       type="text"
                       value={line.unit}
                       onChange={(e) => setProductLine(index, "unit", e.target.value)}
                       placeholder="Unidad"
-                      className="w-20 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      className="w-20 rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground"
                     />
                     <button
                       type="button"
                       onClick={() => removeProductLine(index)}
-                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                      className="rounded-lg p-2 text-muted-foreground hover:bg-slate-200 hover:text-foreground"
                       title="Quitar línea"
                     >
                       <Trash2 className="size-4" />
@@ -648,26 +649,26 @@ export default function SolicitudesPage() {
                 <button
                   type="button"
                   onClick={addProductLine}
-                  className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                  className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   <Plus className="size-4" /> Añadir producto
                 </button>
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Notas</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Notas</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 rows={2}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <DialogFooter className="gap-2 pt-4">
               <button
                 type="button"
                 onClick={() => setEditId(null)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/40"
               >
                 Cancelar
               </button>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { TENANT_MODULES } from "@/constants";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
 import { cn } from "@/lib/utils";
@@ -115,7 +115,7 @@ export function ModulosTab({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="rounded-xl bg-[#197fe6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1565c0] disabled:opacity-60"
+          className="rounded-xl bg-[#dc2626] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:opacity-60"
         >
           {saving ? "Guardando…" : "Guardar cambios"}
         </button>

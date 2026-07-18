@@ -171,6 +171,20 @@ export const processInboundMessage = internalAction({
         mediaType: args.mediaType,
       });
 
+      // Clasificación automática en carpetas del inbox según keywords (facturas,
+      // proveedores, RRHH…). No bloquea el flujo del bot si falla.
+      if (args.text?.trim()) {
+        try {
+          await ctx.runMutation(internal.conversationFolders.autoClassify, {
+            conversationId,
+            tenantId: args.tenantId,
+            text: args.text,
+          });
+        } catch (e) {
+          console.error("autoClassify error", e);
+        }
+      }
+
       const conversation = await ctx.runQuery(
         internal.system.conversations.getByThreadId,
         { threadId }

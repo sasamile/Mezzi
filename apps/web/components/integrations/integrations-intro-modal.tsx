@@ -38,7 +38,7 @@ interface IntegrationsIntroModalProps {
 }
 
 export function IntegrationsIntroModal({
-  primaryColor = "#197fe6",
+  primaryColor = "#dc2626",
 }: IntegrationsIntroModalProps) {
   const [open, setOpen] = useState(false);
 

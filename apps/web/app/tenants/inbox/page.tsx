@@ -7,34 +7,43 @@ import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
 import { useAuth } from "@/lib/auth-context";
 import {
-  Search,
-  Paperclip,
-  ImageIcon,
-  Mic,
   Bot,
   CheckCircle2,
-  Send,
-  Wand2,
-  Info,
-  ArrowLeft,
-  Flag,
   UserRound,
-  CornerUpLeft,
-  RotateCw,
+  MessageSquare,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ImageViewerModal, type ChatImageItem } from "@/components/inbox/image-viewer-modal";
 import { ImagePreviewModal } from "@/components/inbox/image-preview-modal";
 import { DocumentPreviewModal } from "@/components/inbox/document-preview-modal";
 import { CustomAudioPlayer } from "@/components/inbox/custom-audio-player";
-import { sileo } from "sileo";
+import { ConversationsLayout } from "@/components/inbox/conversations-layout";
+import {
+  ConversationsListEmpty,
+  ConversationsListHeader,
+  ConversationsListSkeleton,
+  type FilterMode,
+} from "@/components/inbox/conversations-list";
+import {
+  ConversationHeader,
+  PRIORITY_DOT,
+  PRIORITY_LABELS,
+} from "@/components/inbox/conversation-header";
+import { ConversationComposer } from "@/components/inbox/conversation-composer";
+import {
+  FoldersRail,
+  type FolderSelection,
+} from "@/components/inbox/folders-rail";
+import { FolderManagerModal } from "@/components/inbox/folder-manager-modal";
+import { ConversationListItem } from "@/components/inbox/conversation-list-item";
+import { UNCLASSIFIED, folderIcon } from "@/lib/inbox-folders";
+import { Check } from "lucide-react";
+import { inbox } from "@/components/inbox/inbox-theme";
+import {
+  resolvePrimaryColor,
+  resolveSecondaryColor,
+  tenantThemeCssVars,
+} from "@/lib/tenant-theme";
+import { sileo } from "@/lib/toast";
 
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
@@ -64,25 +73,6 @@ async function uploadToConvexStorage(
 }
 import { IntegrationBlockedBanner } from "@/components/integrations/integration-blocked-banner";
 import { cn } from "@/lib/utils";
-
-const DEFAULT_PRIMARY = "#dc2626";
-const DEFAULT_SECONDARY = "#06b6d4";
-
-const PRIORITY_LABELS = {
-  low: "Baja",
-  normal: "Normal",
-  high: "Alta",
-  urgent: "Urgente",
-} as const;
-
-const PRIORITY_DOT: Record<"low" | "normal" | "high" | "urgent", string> = {
-  low: "#10b981",
-  normal: "#f59e0b",
-  high: "#f97316",
-  urgent: "#dc2626",
-};
-
-type FilterMode = "all" | "bot" | "human" | "urgent";
 
 function formatDateDivider(ts: number): string {
   const d = new Date(ts);
@@ -123,7 +113,14 @@ export default function InboxPage() {
   } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [improving, setImproving] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState<FolderSelection>(null);
+  const [folderManagerOpen, setFolderManagerOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(40);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
+
+  const PAGE_SIZE = 40;
 
   useEffect(() => {
     setMounted(true);
@@ -145,7 +142,19 @@ export default function InboxPage() {
   );
   const tenantConversations = useQuery(
     api.conversations.listByTenant,
+    tenantId
+      ? { tenantId, userId: (user?._id as Id<"users">) ?? undefined }
+      : "skip"
+  );
+  const folders = useQuery(
+    api.conversationFolders.listByTenant,
     tenantId ? { tenantId } : "skip"
+  );
+  const membership = useQuery(
+    api.users.getMembershipByTenantAndUser,
+    tenantId && user?._id
+      ? { tenantId, userId: user._id as Id<"users"> }
+      : "skip"
   );
   const activeMessages = useQuery(
     api.messages.listByConversation,
@@ -167,20 +176,14 @@ export default function InboxPage() {
   const updatePriority = useMutation(api.conversations.updatePriority);
   const updateAssignedTo = useMutation(api.conversations.updateAssignedTo);
   const updateStatus = useMutation(api.conversations.updateStatus);
+  const toggleConversationFolder = useMutation(
+    api.conversationFolders.toggleConversationFolder
+  );
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
-  const secondaryColor = tenant?.secondaryColor ?? DEFAULT_SECONDARY;
-
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
+  const secondaryColor = resolveSecondaryColor(tenant?.secondaryColor);
   const cssVars = useMemo(
-    () =>
-      ({
-        "--primaryColor": primaryColor,
-        "--primaryDark": `color-mix(in srgb, ${primaryColor} 78%, #1a1a2e)`,
-        "--primarySoft": `color-mix(in srgb, ${primaryColor} 14%, white)`,
-        "--primaryLight": `color-mix(in srgb, ${primaryColor} 8%, white)`,
-        "--primaryFaint": `color-mix(in srgb, ${primaryColor} 4%, white)`,
-        "--secondaryColor": secondaryColor,
-      } as React.CSSProperties),
+    () => tenantThemeCssVars(primaryColor, secondaryColor),
     [primaryColor, secondaryColor]
   );
 
@@ -262,8 +265,49 @@ export default function InboxPage() {
     };
   }, [tenantConversations]);
 
+  const isAdminLike =
+    membership?.role === "OWNER" || membership?.role === "ADMIN";
+  const canManageFolders = isAdminLike;
+  const accessibleFolders = useMemo(() => {
+    const all = folders ?? [];
+    const allowed = membership?.allowedFolders;
+    if (isAdminLike || !allowed) return all;
+    const allowedSet = new Set(allowed);
+    return all.filter((f) => allowedSet.has(f._id));
+  }, [folders, membership, isAdminLike]);
+  const showUnclassified = useMemo(() => {
+    const allowed = membership?.allowedFolders;
+    if (isAdminLike || !allowed) return true;
+    return allowed.includes(UNCLASSIFIED);
+  }, [membership, isAdminLike]);
+
+  const folderCounts = useMemo(() => {
+    const list = tenantConversations ?? [];
+    const counts: Record<string, number> = {};
+    let unclassified = 0;
+    for (const c of list) {
+      const ids = c.folderIds ?? [];
+      if (ids.length === 0) unclassified++;
+      for (const id of ids) counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return { counts, unclassified, total: list.length };
+  }, [tenantConversations]);
+
+  // Si la carpeta seleccionada deja de estar disponible, volver a "Todas".
+  useEffect(() => {
+    if (selectedFolder === null || selectedFolder === UNCLASSIFIED) return;
+    if (folders && !accessibleFolders.some((f) => f._id === selectedFolder)) {
+      setSelectedFolder(null);
+    }
+  }, [selectedFolder, accessibleFolders, folders]);
+
   const filteredConversations = useMemo(() => {
     let list = tenantConversations ?? [];
+    if (selectedFolder === UNCLASSIFIED) {
+      list = list.filter((c) => (c.folderIds ?? []).length === 0);
+    } else if (selectedFolder !== null) {
+      list = list.filter((c) => (c.folderIds ?? []).includes(selectedFolder as Id<"conversationFolders">));
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -294,7 +338,32 @@ export default function InboxPage() {
       if (a.status !== "pending" && b.status === "pending") return 1;
       return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
     });
-  }, [tenantConversations, filterMode, searchQuery]);
+  }, [tenantConversations, filterMode, searchQuery, selectedFolder]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filterMode, searchQuery, selectedFolder]);
+
+  const visibleConversations = useMemo(
+    () => filteredConversations.slice(0, visibleCount),
+    [filteredConversations, visibleCount]
+  );
+  const hasMoreConversations = visibleCount < filteredConversations.length;
+
+  const handleListScroll = () => {
+    const el = listScrollRef.current;
+    if (!el || !hasMoreConversations || loadingMoreRef.current) return;
+    const nearBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+    if (!nearBottom) return;
+    loadingMoreRef.current = true;
+    setVisibleCount((n) =>
+      Math.min(n + PAGE_SIZE, filteredConversations.length)
+    );
+    requestAnimationFrame(() => {
+      loadingMoreRef.current = false;
+    });
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -566,6 +635,21 @@ export default function InboxPage() {
     setContextMenu(null);
   };
 
+  const handleToggleFolder = async (
+    conversationId: Id<"conversations">,
+    folderId: Id<"conversationFolders">,
+    present: boolean
+  ) => {
+    try {
+      await toggleConversationFolder({ conversationId, folderId, present });
+    } catch (e) {
+      sileo.error({
+        title: "No se pudo mover",
+        description: e instanceof Error ? e.message : "Error al mover el chat",
+      });
+    }
+  };
+
   const handleContextMenuSetMode = async (userId: Id<"users"> | null) => {
     const targetId = contextMenu?.conversationId;
     if (!targetId) return;
@@ -690,31 +774,28 @@ export default function InboxPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando…</p>
       </div>
     );
   }
   if (ycloud === undefined) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando...</p>
+        <p className="text-sm text-muted-foreground">Cargando…</p>
       </div>
     );
   }
   if (!ycloud?.connected) {
     return (
       <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto p-6">
-        <div
-          className="mx-auto w-full max-w-2xl"
-          style={{ "--primaryColor": primaryColor } as React.CSSProperties}
-        >
+        <div className="mx-auto w-full max-w-2xl" style={cssVars}>
           <IntegrationBlockedBanner
             message="Necesitas conectar WhatsApp o YCloud para usar el Inbox."
             integrationName="WhatsApp (YCloud)"
             primaryColor={primaryColor}
           />
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm text-slate-500">
+          <div className="mt-6 rounded-xl border border-border bg-card p-8 text-center">
+            <p className="text-sm text-muted-foreground">
               Una vez conectes YCloud en Integraciones, podrás recibir y enviar
               mensajes desde el Inbox.
             </p>
@@ -724,71 +805,40 @@ export default function InboxPage() {
     );
   }
 
-  const FILTERS: { id: FilterMode; label: string }[] = [
-    { id: "all", label: "Todas" },
-    { id: "bot", label: "Bot" },
-    { id: "human", label: "Humano" },
-    { id: "urgent", label: "Urgentes" },
-  ];
-
-  return (
-    <div
-      className="flex h-full min-h-0 w-full overflow-hidden bg-white font-[var(--font-jakarta)]"
-      style={cssVars}
-    >
-      {/* Sidebar conv list */}
-      <aside
-        className={`shrink-0 flex flex-col border-r border-slate-200 min-w-[280px] md:min-w-[340px] transition-all duration-300 bg-white
-          ${sidebarOpen ? "flex w-full md:w-[340px]" : "hidden md:flex md:w-[340px]"}`}
+  const listPanel = (
+    <>
+      <ConversationsListHeader
+        filterMode={filterMode}
+        onFilterChange={setFilterMode}
+        counts={counts}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
+      {(canManageFolders || accessibleFolders.length > 0) && (
+        <FoldersRail
+          folders={accessibleFolders}
+          counts={folderCounts.counts}
+          totalCount={folderCounts.total}
+          unclassifiedCount={folderCounts.unclassified}
+          showUnclassified={showUnclassified}
+          selected={selectedFolder}
+          onSelect={setSelectedFolder}
+          canManage={canManageFolders}
+          onManage={() => setFolderManagerOpen(true)}
+        />
+      )}
+      <div
+        ref={listScrollRef}
+        onScroll={handleListScroll}
+        className="scrollbar-none min-h-0 flex-1 overflow-y-auto py-1.5"
       >
-        <header className="shrink-0 p-4 border-b border-slate-100">
-          {/* Tab pills */}
-          <div className="mb-3 rounded-xl bg-slate-100 p-[3px] grid grid-cols-4 h-9">
-            {FILTERS.map((f) => {
-              const active = filterMode === f.id;
-              const c = counts[f.id];
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFilterMode(f.id)}
-                  className={`rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1
-                    ${active
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  {f.label}
-                  <span
-                    className={`text-[10px] font-bold tabular-nums ${
-                      active ? "text-slate-400" : "text-slate-400"
-                    }`}
-                  >
-                    {c}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Search */}
-          <div className="relative">
-            <Search
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              size={15}
-              strokeWidth={1.8}
-            />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar cliente o número..."
-              className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-(--primarySoft) focus:border-(--primaryColor) transition-shadow"
-            />
-          </div>
-        </header>
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {filteredConversations.map((conv) => {
+        {tenantConversations === undefined ? (
+          <ConversationsListSkeleton />
+        ) : filteredConversations.length === 0 ? (
+          <ConversationsListEmpty />
+        ) : (
+          <>
+            {visibleConversations.map((conv) => {
             const isActive = conv._id === selectedConversationId;
             const bot = isBotMode(conv);
             const isNew =
@@ -805,10 +855,16 @@ export default function InboxPage() {
                 }
               })();
             return (
-              <button
+              <ConversationListItem
                 key={conv._id}
-                type="button"
-                onClick={() => setSelectedConversationId(conv._id)}
+                conv={conv}
+                isActive={isActive}
+                isNew={!!isNew}
+                isBot={bot}
+                onSelect={() => {
+                  setSelectedConversationId(conv._id);
+                  setSidebarOpen(false);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -818,805 +874,513 @@ export default function InboxPage() {
                     conversationId: conv._id,
                   });
                 }}
-                className={cn(
-                  "w-full text-left flex items-start gap-3 px-3 py-3 border-b border-slate-100 transition-colors hover:bg-slate-50/70",
-                  isActive && "bg-(--primaryFaint)"
-                )}
-              >
-                <div
-                  className="shrink-0 size-10 rounded-xl grid place-items-center text-white text-sm font-bold shadow-sm"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, var(--primaryColor), var(--primaryDark))",
-                  }}
-                >
-                  {conv.customerName.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                    <span
-                      className={cn(
-                        "truncate text-[14px]",
-                        isNew ? "font-bold text-slate-900" : "font-semibold text-slate-800"
-                      )}
-                    >
-                      {conv.customerName}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-[10.5px] tabular-nums shrink-0",
-                        isNew ? "text-(--primaryColor) font-bold" : "text-slate-400"
-                      )}
-                    >
-                      {new Date(conv.lastMessageAt).toLocaleTimeString("es", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <div className="flex grow items-center gap-1 min-w-0">
-                      {conv.lastMessageDirection === "OUTBOUND" && (
-                        <CornerUpLeft
-                          className="shrink-0 text-emerald-600"
-                          size={11}
-                          strokeWidth={2}
-                        />
-                      )}
-                      <span className="truncate text-slate-500">
-                        {conv.lastMessageDirection === "OUTBOUND" && (
-                          <span className="text-emerald-600 font-medium">Tú: </span>
-                        )}
-                        {conv.lastMessagePreview || "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {conv.status === "pending" && (
-                        <span
-                          className="inline-flex items-center justify-center size-4 rounded-full bg-amber-100"
-                          title="Necesita atención"
-                        >
-                          <span
-                            className="size-1.5 rounded-full bg-amber-500"
-                          />
-                        </span>
-                      )}
-                      {hasPriority(conv.priority) && conv.status !== "pending" && (
-                        <span
-                          className="inline-flex items-center justify-center size-4 rounded-full"
-                          style={{
-                            background: `${PRIORITY_DOT[conv.priority]}25`,
-                          }}
-                          title={PRIORITY_LABELS[conv.priority]}
-                        >
-                          <span
-                            className="size-1.5 rounded-full"
-                            style={{ background: PRIORITY_DOT[conv.priority] }}
-                          />
-                        </span>
-                      )}
-                      <span
-                        className={cn(
-                          "inline-flex items-center justify-center size-5 rounded-full",
-                          bot
-                            ? "bg-emerald-100 text-emerald-600"
-                            : "bg-(--primarySoft) text-(--primaryColor)"
-                        )}
-                        title={bot ? "Bot" : "Agente"}
-                      >
-                        {bot ? (
-                          <Bot size={11} strokeWidth={2} />
-                        ) : (
-                          <UserRound size={11} strokeWidth={2} />
-                        )}
-                      </span>
-                      {isNew && (
-                        <span
-                          className="size-2 rounded-full bg-(--primaryColor) ml-0.5"
-                          title="Nuevo"
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </button>
+              />
             );
           })}
-          {(!tenantConversations || tenantConversations.length === 0) && (
-            <div className="py-12 text-center">
-              <p className="text-sm text-slate-500">No hay conversaciones</p>
+            {hasMoreConversations && (
+              <p className="py-3 text-center text-[11px] text-muted-foreground">
+                Cargando más…
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const chatPanel = (
+    <>
+      {activeConversation ? (
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ConversationHeader
+              customerName={activeConversation.customerName}
+              status={activeConversation.status}
+              isBot={isBotMode(activeConversation)}
+              isPending={activeConversation.status === "pending"}
+              phone={conversationPhone}
+              priority={
+                hasPriority(activeConversation.priority)
+                  ? activeConversation.priority
+                  : null
+              }
+              retryingBot={retryingBot}
+              showRetryBot={
+                isBotMode(activeConversation) &&
+                activeConversation.status !== "closed" &&
+                activeConversation.channel === "whatsapp"
+              }
+              showContactInfo={showContactInfo}
+              onBack={() => setSidebarOpen(true)}
+              onToggleMode={() =>
+                isBotMode(activeConversation)
+                  ? handleSetMode(getHumanUserId())
+                  : handleSetMode(null)
+              }
+              canTakeControl={Boolean(getHumanUserId())}
+              onRetryBot={handleRetryBot}
+              onResolve={() => handleSetStatus("closed")}
+              onReopen={() => handleSetStatus("open")}
+              onSetPriority={handleSetPriority}
+              onToggleContactInfo={() => setShowContactInfo((x) => !x)}
+            />
+
+            <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+              {messageGroups.map(({ date, messages }) => (
+                <div key={date} className="mb-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      {date}
+                    </span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                  <div className="space-y-2.5">
+                    {messages.map((msg) => {
+                      const isOutbound = msg.direction === "OUTBOUND";
+                      return (
+                        <div
+                          key={msg._id}
+                          className={cn(
+                            "flex",
+                            isOutbound ? "justify-end" : "justify-start"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "max-w-[80%] px-3 py-2 text-[14.2px] leading-snug",
+                              isOutbound ? inbox.bubbleOut : inbox.bubbleIn
+                            )}
+                          >
+                            {msg.mediaUrl && (
+                              <div className="mb-2 overflow-hidden rounded-lg">
+                                {msg.mediaType === "video" ? (
+                                  <video
+                                    src={msg.mediaUrl}
+                                    controls
+                                    className="max-h-64 w-full rounded object-contain"
+                                  />
+                                ) : msg.mediaType === "document" ? (
+                                  <div className="overflow-hidden rounded-lg border border-border bg-card">
+                                    <div className="relative h-48 overflow-hidden bg-muted sm:h-56">
+                                      <iframe
+                                        src={`${msg.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
+                                        className="absolute inset-0 h-full w-full border-0 bg-card"
+                                        title="Vista previa PDF"
+                                      />
+                                    </div>
+                                    <a
+                                      href={msg.mediaUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-3 border-t border-border p-3 transition-colors hover:bg-muted/50"
+                                    >
+                                      <div
+                                        className="grid size-11 shrink-0 place-items-center rounded-lg text-xs font-bold text-white"
+                                        style={{
+                                          backgroundColor: "var(--primaryColor)",
+                                        }}
+                                      >
+                                        PDF
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-semibold text-foreground">
+                                          {msg.content && msg.content !== "Documento"
+                                            ? msg.content
+                                            : "Documento"}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                          Toca para abrir
+                                        </p>
+                                      </div>
+                                    </a>
+                                  </div>
+                                ) : msg.mediaType === "audio" ? (
+                                  <div className="-ml-1">
+                                    <CustomAudioPlayer
+                                      src={msg.mediaUrl}
+                                      isContact={msg.direction === "INBOUND"}
+                                      avatarSeed={
+                                        msg.direction === "INBOUND"
+                                          ? activeConversation.customerName
+                                          : "Agente"
+                                      }
+                                      timestamp={new Date(
+                                        msg.createdAt
+                                      ).toLocaleTimeString("es", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="max-w-sm cursor-pointer overflow-hidden rounded-md"
+                                    onClick={() => {
+                                      const idx = chatImages.findIndex(
+                                        (img) => img.url === msg.mediaUrl
+                                      );
+                                      setViewerInitialIndex(
+                                        idx !== -1 ? idx : 0
+                                      );
+                                    }}
+                                  >
+                                    <img
+                                      src={msg.mediaUrl}
+                                      alt="Imagen adjunta"
+                                      className="max-h-64 w-full object-contain"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {(!msg.mediaUrl ||
+                              (msg.content &&
+                                ![
+                                  "Imagen",
+                                  "Video",
+                                  "Audio",
+                                  "Sticker",
+                                  "Documento",
+                                ].includes(msg.content) &&
+                                msg.mediaType !== "document")) && (
+                              <p className="whitespace-pre-wrap break-words">
+                                {msg.content}
+                              </p>
+                            )}
+                            <p className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+                              {isOutbound && msg.isBot && (
+                                <span className="mr-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                                  Bot ·
+                                </span>
+                              )}
+                              {new Date(msg.createdAt).toLocaleTimeString("es", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+              {activeMessages?.length === 0 && (
+                <div className="flex h-40 items-center justify-center">
+                  <p className="text-sm text-muted-foreground">
+                    No hay mensajes aún
+                  </p>
+                </div>
+              )}
             </div>
+
+            <ConversationComposer
+              replyText={replyText}
+              onReplyChange={setReplyText}
+              onSend={handleSendMessage}
+              sending={sending}
+              sendError={sendError}
+              pendingAttachments={pendingAttachments}
+              onRemoveAttachment={handleRemoveAttachment}
+              isRecording={isRecording}
+              onToggleRecording={() =>
+                isRecording ? handleStopRecording() : handleStartRecording()
+              }
+              onImprove={handleImproveText}
+              improving={improving}
+              fileInputRef={fileInputRef}
+              imageInputRef={imageInputRef}
+              documentInputRef={documentInputRef}
+              onFileSelect={handleFileSelect}
+              onImageChange={handleImageChange}
+              onDocumentChange={handleDocumentChange}
+            />
+          </div>
+
+          {showContactInfo && (
+            <aside
+              className={cn(
+                "flex w-72 shrink-0 flex-col overflow-hidden border-l",
+                inbox.border,
+                inbox.panel
+              )}
+            >
+              <div className={cn("shrink-0 p-4", inbox.header)}>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Información de contacto
+                </h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">Nombre: </span>
+                    <span className="font-medium text-foreground">
+                      {activeConversation.customerName}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Canal: </span>
+                    <span className="font-medium text-foreground">
+                      {activeConversation.channel}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Contacto: </span>
+                    <span className="font-medium text-foreground">
+                      {conversationPhone}
+                    </span>
+                  </p>
+                  {hasPriority(activeConversation.priority) && (
+                    <p>
+                      <span className="text-muted-foreground">Prioridad: </span>
+                      <span className="font-medium text-foreground">
+                        {PRIORITY_LABELS[activeConversation.priority]}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Imágenes y videos
+                </h4>
+                {mediaMessages.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No hay archivos en esta conversación
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {mediaMessages.map((m) =>
+                      m.mediaUrl ? (
+                        <div
+                          key={m._id}
+                          className="overflow-hidden rounded-lg border border-border bg-card"
+                        >
+                          {m.mediaType === "video" ? (
+                            <video
+                              src={m.mediaUrl}
+                              className="aspect-square w-full object-cover"
+                            />
+                          ) : m.mediaType === "document" ? (
+                            <a
+                              href={m.mediaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group flex aspect-square flex-col items-center justify-center p-3 hover:bg-muted/50"
+                            >
+                              <div
+                                className="grid size-10 place-items-center rounded text-xs font-bold text-white"
+                                style={{
+                                  backgroundColor: "var(--primaryColor)",
+                                }}
+                              >
+                                PDF
+                              </div>
+                              <span className="mt-2 max-w-full truncate text-[10px] text-muted-foreground">
+                                {m.content || "Documento"}
+                              </span>
+                            </a>
+                          ) : (
+                            <a
+                              href={m.mediaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <img
+                                src={m.mediaUrl}
+                                alt=""
+                                className="aspect-square w-full object-cover hover:opacity-95"
+                              />
+                            </a>
+                          )}
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                )}
+              </div>
+            </aside>
           )}
         </div>
-      </aside>
-
-      {/* Chat */}
-      <main
-        className={cn(
-          "flex-1 flex flex-col min-w-0 bg-slate-50/40",
-          sidebarOpen ? "hidden md:flex" : "flex"
-        )}
-      >
-        {activeConversation ? (
-          <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-            <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-              {/* Header compacto */}
-              <header className="shrink-0 px-4 py-2.5 border-b border-slate-200 bg-white flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="md:hidden size-8 rounded-lg flex items-center justify-center text-slate-500"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-                <div
-                  className="shrink-0 size-10 rounded-xl grid place-items-center text-white text-sm font-bold shadow-sm"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, var(--primaryColor), var(--primaryDark))",
-                  }}
-                >
-                  {activeConversation.customerName.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-sm font-bold text-slate-900 truncate">
-                    {activeConversation.customerName}
-                  </h2>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 truncate">
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        activeConversation.status === "pending"
-                          ? "text-amber-600"
-                          : isBotMode(activeConversation)
-                            ? "text-emerald-600"
-                            : "text-(--primaryColor)"
-                      )}
-                    >
-                      {activeConversation.status === "pending"
-                        ? "Necesita atención"
-                        : isBotMode(activeConversation)
-                          ? "Bot IA"
-                          : "Agente"}
-                    </span>
-                    <span>·</span>
-                    <span>
-                      {activeConversation.status === "open"
-                        ? "Activo"
-                        : activeConversation.status === "closed"
-                          ? "Cerrado"
-                          : "Pendiente"}
-                    </span>
-                    {conversationPhone && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{conversationPhone}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Bot/Agente toggle pill */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    isBotMode(activeConversation)
-                      ? handleSetMode(getHumanUserId())
-                      : handleSetMode(null)
-                  }
-                  disabled={isBotMode(activeConversation) && !getHumanUserId()}
-                  title={
-                    activeConversation.status === "pending"
-                      ? "Necesita atención humana"
-                      : isBotMode(activeConversation)
-                        ? "Bot activo - click para tomar control"
-                        : "Click para activar el bot"
-                  }
-                  className={cn(
-                    "shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-all disabled:opacity-50",
-                    activeConversation.status === "pending"
-                      ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                      : isBotMode(activeConversation)
-                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                        : "bg-(--primarySoft) text-(--primaryColor) hover:bg-(--primaryLight)"
-                  )}
-                >
-                  {isBotMode(activeConversation) ? (
-                    <Bot size={13} strokeWidth={2} />
-                  ) : (
-                    <UserRound size={13} strokeWidth={2} />
-                  )}
-                  {activeConversation.status === "pending"
-                    ? "Atender"
-                    : isBotMode(activeConversation)
-                      ? "Bot activo"
-                      : "Agente"}
-                </button>
-
-                {isBotMode(activeConversation) &&
-                  activeConversation.status !== "closed" &&
-                  activeConversation.channel === "whatsapp" && (
-                    <button
-                      type="button"
-                      onClick={handleRetryBot}
-                      disabled={retryingBot}
-                      title="Reprocesar el último mensaje del cliente con el bot"
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50"
-                    >
-                      <RotateCw
-                        size={13}
-                        strokeWidth={2}
-                        className={cn(retryingBot && "animate-spin")}
-                      />
-                      {retryingBot ? "Reprocesando…" : "Reintentar bot"}
-                    </button>
-                  )}
-
-                {/* Resolver */}
-                {activeConversation.status !== "closed" ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSetStatus("closed")}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
-                    title="Marcar como resuelta"
-                  >
-                    <CheckCircle2 size={13} strokeWidth={2} />
-                    Resolver
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSetStatus("open")}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                  >
-                    Reabrir
-                  </button>
-                )}
-
-                {/* Prioridad */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      title="Prioridad"
-                      className="shrink-0 size-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
-                      style={
-                        hasPriority(activeConversation.priority)
-                          ? { color: PRIORITY_DOT[activeConversation.priority] }
-                          : undefined
-                      }
-                    >
-                      <Flag size={16} strokeWidth={1.7} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Prioridad</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {hasPriority(activeConversation.priority) && (
-                      <>
-                        <DropdownMenuItem onClick={() => handleSetPriority(null)}>
-                          Quitar prioridad
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    {(["low", "normal", "high", "urgent"] as const).map((p) => (
-                      <DropdownMenuItem key={p} onClick={() => handleSetPriority(p)}>
-                        <span
-                          className="size-2 rounded-full mr-2"
-                          style={{ background: PRIORITY_DOT[p] }}
-                        />
-                        {PRIORITY_LABELS[p]}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Info */}
-                <button
-                  type="button"
-                  onClick={() => setShowContactInfo((x) => !x)}
-                  className={cn(
-                    "shrink-0 size-8 grid place-items-center rounded-lg transition-colors",
-                    showContactInfo
-                      ? "bg-(--primarySoft) text-(--primaryColor)"
-                      : "text-slate-500 hover:bg-slate-100"
-                  )}
-                  title="Info de contacto"
-                >
-                  <Info size={16} strokeWidth={1.7} />
-                </button>
-              </header>
-
-              {/* Mensajes */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-                {messageGroups.map(({ date, messages }) => (
-                  <div key={date} className="mb-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="flex-1 h-px bg-slate-200" />
-                      <span className="text-[11px] font-medium text-slate-400">
-                        — {date} —
-                      </span>
-                      <div className="flex-1 h-px bg-slate-200" />
-                    </div>
-                    <div className="space-y-3">
-                      {messages.map((msg) => {
-                        const isOutbound = msg.direction === "OUTBOUND";
-                        return (
-                          <div
-                            key={msg._id}
-                            className={cn(
-                              "flex",
-                              isOutbound ? "justify-end" : "justify-start"
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
-                                isOutbound
-                                  ? "bg-(--primarySoft) text-slate-800"
-                                  : "bg-white text-slate-800 border border-slate-200/70"
-                              )}
-                              style={
-                                isOutbound
-                                  ? {
-                                      borderTopRightRadius: 6,
-                                    }
-                                  : {
-                                      borderTopLeftRadius: 6,
-                                    }
-                              }
-                            >
-                              {msg.mediaUrl && (
-                                <div className="mb-2 rounded-lg overflow-hidden">
-                                  {msg.mediaType === "video" ? (
-                                    <video
-                                      src={msg.mediaUrl}
-                                      controls
-                                      className="max-h-64 w-full object-contain rounded"
-                                    />
-                                  ) : msg.mediaType === "document" ? (
-                                    <div className="rounded-lg overflow-hidden border border-slate-200 bg-white">
-                                      <div className="relative h-48 sm:h-56 bg-slate-50 overflow-hidden">
-                                        <iframe
-                                          src={`${msg.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
-                                          className="absolute inset-0 w-full h-full border-0 bg-white"
-                                          title="Vista previa PDF"
-                                        />
-                                      </div>
-                                      <a
-                                        href={msg.mediaUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors border-t border-slate-100"
-                                      >
-                                        <div
-                                          className="shrink-0 size-11 rounded-lg grid place-items-center text-white font-bold text-xs"
-                                          style={{ backgroundColor: "#E53935" }}
-                                        >
-                                          PDF
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-semibold text-slate-900 truncate">
-                                            {msg.content && msg.content !== "Documento"
-                                              ? msg.content
-                                              : "Documento"}
-                                          </p>
-                                          <p className="text-[11px] text-slate-500">
-                                            Toca para abrir
-                                          </p>
-                                        </div>
-                                      </a>
-                                    </div>
-                                  ) : msg.mediaType === "audio" ? (
-                                    <div className="-ml-1">
-                                      <CustomAudioPlayer
-                                        src={msg.mediaUrl}
-                                        isContact={msg.direction === "INBOUND"}
-                                        avatarSeed={
-                                          msg.direction === "INBOUND"
-                                            ? activeConversation.customerName
-                                            : "Agente"
-                                        }
-                                        timestamp={new Date(msg.createdAt).toLocaleTimeString(
-                                          "es",
-                                          { hour: "2-digit", minute: "2-digit" }
-                                        )}
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div
-                                      className="cursor-pointer overflow-hidden rounded-md max-w-sm"
-                                      onClick={() => {
-                                        const idx = chatImages.findIndex(
-                                          (img) => img.url === msg.mediaUrl
-                                        );
-                                        setViewerInitialIndex(idx !== -1 ? idx : 0);
-                                      }}
-                                    >
-                                      <img
-                                        src={msg.mediaUrl}
-                                        alt="Imagen adjunta"
-                                        className="object-contain max-h-64 w-full"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              {(!msg.mediaUrl ||
-                                (msg.content &&
-                                  !["Imagen", "Video", "Audio", "Sticker", "Documento"].includes(
-                                    msg.content
-                                  ) &&
-                                  msg.mediaType !== "document")) && (
-                                <p className="whitespace-pre-wrap break-words leading-relaxed">
-                                  {msg.content}
-                                </p>
-                              )}
-                              <p className="mt-1 text-[10px] text-slate-400 tabular-nums">
-                                {isOutbound && msg.isBot && (
-                                  <span className="text-emerald-600 font-semibold mr-1">
-                                    Bot ·
-                                  </span>
-                                )}
-                                {new Date(msg.createdAt).toLocaleTimeString("es", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-                {activeMessages?.length === 0 && (
-                  <div className="flex h-40 items-center justify-center">
-                    <p className="text-sm text-slate-500">No hay mensajes aún</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Composer */}
-              <div className="shrink-0 border-t border-slate-200 bg-white p-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="audio/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-                <input
-                  ref={documentInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.txt"
-                  multiple
-                  className="hidden"
-                  onChange={handleDocumentChange}
-                />
-
-                {pendingAttachments.length > 0 && (
-                  <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
-                    {pendingAttachments.map((att, i) => (
-                      <div key={i} className="relative shrink-0">
-                        {att.type === "image" && att.preview ? (
-                          <img
-                            src={att.preview}
-                            alt=""
-                            className="w-14 h-14 rounded-lg object-cover border border-slate-200"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 grid place-items-center text-slate-400">
-                            {att.type === "document" ? (
-                              <Paperclip size={18} />
-                            ) : (
-                              <Mic size={18} />
-                            )}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(i)}
-                          className="absolute -top-1 -right-1 size-5 rounded-full bg-slate-800 text-white grid place-items-center text-xs"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-(--primarySoft) focus-within:border-(--primaryColor) transition-shadow">
-                  <button
-                    type="button"
-                    onClick={() => documentInputRef.current?.click()}
-                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50"
-                    title="Adjuntar Documento"
-                  >
-                    <Paperclip size={17} strokeWidth={1.7} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50"
-                    title="Adjuntar Imagen"
-                  >
-                    <ImageIcon size={17} strokeWidth={1.7} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      isRecording ? handleStopRecording() : handleStartRecording()
-                    }
-                    className={cn(
-                      "size-9 rounded-lg grid place-items-center",
-                      isRecording
-                        ? "bg-red-100 text-red-600 animate-pulse"
-                        : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
-                    )}
-                    title={isRecording ? "Detener grabación" : "Grabar nota de voz"}
-                  >
-                    <Mic size={17} strokeWidth={1.7} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleImproveText}
-                    disabled={!replyText.trim() || improving}
-                    className="size-9 rounded-lg grid place-items-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Mejorar con IA"
-                  >
-                    <Wand2 size={17} strokeWidth={1.7} />
-                  </button>
-                  <input
-                    type="text"
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && !e.shiftKey && handleSendMessage()
-                    }
-                    placeholder={
-                      pendingAttachments.length
-                        ? "Añadir mensaje (opcional)…"
-                        : "Escribe tu mensaje como operador..."
-                    }
-                    className="flex-1 min-h-[40px] py-2 px-2 bg-transparent border-0 outline-none text-sm text-slate-900 placeholder:text-slate-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendMessage}
-                    disabled={(!replyText.trim() && !pendingAttachments.length) || sending}
-                    className="shrink-0 size-9 rounded-lg grid place-items-center text-white disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                    style={{ background: "var(--primaryColor)" }}
-                    title="Enviar"
-                  >
-                    <Send size={16} strokeWidth={1.8} />
-                  </button>
-                </div>
-                {sendError && (
-                  <p className="mt-2 text-xs text-red-600">{sendError}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Panel info contacto */}
-            {showContactInfo && (
-              <aside className="w-72 shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-slate-100 shrink-0">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Información de contacto
-                  </h3>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <p>
-                      <span className="text-slate-500">Nombre: </span>
-                      <span className="text-slate-900 font-medium">
-                        {activeConversation.customerName}
-                      </span>
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Canal: </span>
-                      <span className="text-slate-900 font-medium">
-                        {activeConversation.channel}
-                      </span>
-                    </p>
-                    <p>
-                      <span className="text-slate-500">Contacto: </span>
-                      <span className="text-slate-900 font-medium">
-                        {conversationPhone}
-                      </span>
-                    </p>
-                    {hasPriority(activeConversation.priority) && (
-                      <p>
-                        <span className="text-slate-500">Prioridad: </span>
-                        <span className="text-slate-900 font-medium">
-                          {PRIORITY_LABELS[activeConversation.priority]}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    Imágenes y videos
-                  </h4>
-                  {mediaMessages.length === 0 ? (
-                    <p className="text-xs text-slate-500">
-                      No hay archivos en esta conversación
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {mediaMessages.map((m) =>
-                        m.mediaUrl ? (
-                          <div
-                            key={m._id}
-                            className="rounded-lg overflow-hidden bg-white border border-slate-200"
-                          >
-                            {m.mediaType === "video" ? (
-                              <video
-                                src={m.mediaUrl}
-                                className="w-full aspect-square object-cover"
-                              />
-                            ) : m.mediaType === "document" ? (
-                              <a
-                                href={m.mediaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex flex-col items-center justify-center p-3 aspect-square hover:bg-slate-50 group"
-                              >
-                                <div
-                                  className="size-10 rounded grid place-items-center text-white font-bold text-xs"
-                                  style={{ backgroundColor: "#E53935" }}
-                                >
-                                  PDF
-                                </div>
-                                <span className="text-[10px] truncate max-w-full mt-2 text-slate-600">
-                                  {m.content || "Documento"}
-                                </span>
-                              </a>
-                            ) : (
-                              <a href={m.mediaUrl} target="_blank" rel="noopener noreferrer">
-                                <img
-                                  src={m.mediaUrl}
-                                  alt=""
-                                  className="w-full aspect-square object-cover hover:opacity-95"
-                                />
-                              </a>
-                            )}
-                          </div>
-                        ) : null
-                      )}
-                    </div>
-                  )}
-                </div>
-              </aside>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-            <div
-              className="size-16 rounded-2xl grid place-items-center mb-4"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--primarySoft), var(--primaryLight))",
-              }}
-            >
-              <Bot size={32} strokeWidth={1.5} style={{ color: "var(--primaryColor)" }} />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900">Bandeja de mensajes</h2>
-            <p className="text-sm text-slate-500 mt-1 max-w-sm">
-              Elige una conversación de la lista para empezar a chatear con tus
-              clientes.
-            </p>
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden mt-4 rounded-lg px-4 py-2 text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700"
-            >
-              Ver conversaciones
-            </button>
-          </div>
-        )}
-
-        {/* Modales */}
-        {viewerInitialIndex !== null && chatImages.length > 0 && (
-          <ImageViewerModal
-            images={chatImages}
-            initialIndex={viewerInitialIndex}
-            onClose={() => setViewerInitialIndex(null)}
-          />
-        )}
-        {selectedImages.length > 0 && activeConversation && (
-          <ImagePreviewModal
-            initialFiles={selectedImages}
-            onClose={() => setSelectedImages([])}
-            onSend={handleSendImages}
-            isSending={sending}
-          />
-        )}
-        {selectedDocuments.length > 0 && activeConversation && (
-          <DocumentPreviewModal
-            initialFiles={selectedDocuments}
-            onClose={() => setSelectedDocuments([])}
-            onSend={handleSendDocuments}
-            isSending={sending}
-          />
-        )}
-
-        {/* Menú contextual */}
-        {contextMenu && (
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
           <div
-            ref={contextMenuRef}
-            className="fixed z-[100] min-w-[210px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
+            className="mb-4 grid size-14 place-items-center rounded-2xl"
+            style={{ background: "var(--primarySoft)" }}
           >
-            <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Acciones rápidas
-            </div>
-            <button
-              type="button"
-              onClick={() => handleSetStatus("closed")}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
-            >
-              <CheckCircle2 size={15} className="text-emerald-600" strokeWidth={1.8} />
-              Marcar como resuelta
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSetStatus("open")}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
-            >
-              Reabrir conversación
-            </button>
-            <div className="my-1 h-px bg-slate-100" />
-            <button
-              type="button"
-              onClick={() => handleContextMenuSetMode(null)}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
-            >
-              <Bot size={15} strokeWidth={1.8} />
-              Cambiar a Bot
-            </button>
-            <button
-              type="button"
-              onClick={() => handleContextMenuSetMode(getHumanUserId())}
-              disabled={!getHumanUserId()}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <UserRound size={15} strokeWidth={1.8} />
-              Cambiar a humano
-            </button>
-            <div className="my-1 h-px bg-slate-100" />
-            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Prioridad
-            </div>
-            {(["low", "normal", "high", "urgent"] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => handleSetPriority(p)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-slate-100"
-              >
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: PRIORITY_DOT[p] }}
-                />
-                {PRIORITY_LABELS[p]}
-              </button>
-            ))}
+            <MessageSquare
+              size={28}
+              strokeWidth={1.5}
+              style={{ color: "var(--primaryColor)" }}
+            />
           </div>
-        )}
-      </main>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            Bandeja de mensajes
+          </h2>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Elige una conversación de la lista para empezar a chatear con tus
+            clientes.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="mt-4 rounded-lg bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/80 md:hidden"
+          >
+            Ver conversaciones
+          </button>
+        </div>
+      )}
+
+      {viewerInitialIndex !== null && chatImages.length > 0 && (
+        <ImageViewerModal
+          images={chatImages}
+          initialIndex={viewerInitialIndex}
+          onClose={() => setViewerInitialIndex(null)}
+        />
+      )}
+      {selectedImages.length > 0 && activeConversation && (
+        <ImagePreviewModal
+          initialFiles={selectedImages}
+          onClose={() => setSelectedImages([])}
+          onSend={handleSendImages}
+          isSending={sending}
+        />
+      )}
+      {selectedDocuments.length > 0 && activeConversation && (
+        <DocumentPreviewModal
+          initialFiles={selectedDocuments}
+          onClose={() => setSelectedDocuments([])}
+          onSend={handleSendDocuments}
+          isSending={sending}
+        />
+      )}
+
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[100] min-w-[210px] overflow-hidden rounded-xl border border-border bg-card p-1 shadow-md"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Acciones rápidas
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSetStatus("closed")}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+          >
+            <CheckCircle2 size={15} className="text-[var(--primaryColor)]" strokeWidth={1.8} />
+            Marcar como resuelta
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetStatus("open")}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+          >
+            Reabrir conversación
+          </button>
+          <div className="my-1 h-px bg-border" />
+          <button
+            type="button"
+            onClick={() => handleContextMenuSetMode(null)}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+          >
+            <Bot size={15} strokeWidth={1.8} />
+            Cambiar a Bot
+          </button>
+          <button
+            type="button"
+            onClick={() => handleContextMenuSetMode(getHumanUserId())}
+            disabled={!getHumanUserId()}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+          >
+            <UserRound size={15} strokeWidth={1.8} />
+            Cambiar a humano
+          </button>
+          <div className="my-1 h-px bg-border" />
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Prioridad
+          </div>
+          {(["low", "normal", "high", "urgent"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handleSetPriority(p)}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+            >
+              <span
+                className="size-2 rounded-full"
+                style={{ background: PRIORITY_DOT[p] }}
+              />
+              {PRIORITY_LABELS[p]}
+            </button>
+          ))}
+          {(folders?.length ?? 0) > 0 && (
+            <>
+              <div className="my-1 h-px bg-border" />
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Carpetas
+              </div>
+              {(() => {
+                const target = tenantConversations?.find(
+                  (c) => c._id === contextMenu.conversationId
+                );
+                const current = new Set(target?.folderIds ?? []);
+                return (folders ?? []).map((f) => {
+                  const FolderIcon = folderIcon(f.icon);
+                  const isIn = current.has(f._id);
+                  return (
+                    <button
+                      key={f._id}
+                      type="button"
+                      onClick={() =>
+                        handleToggleFolder(
+                          contextMenu.conversationId,
+                          f._id,
+                          !isIn
+                        )
+                      }
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                    >
+                      <FolderIcon
+                        size={14}
+                        style={{ color: f.color ?? "#64748b" }}
+                      />
+                      <span className="flex-1 truncate">{f.name}</span>
+                      {isIn && (
+                        <Check
+                          size={14}
+                          className="shrink-0 text-[var(--primaryColor)]"
+                        />
+                      )}
+                    </button>
+                  );
+                });
+              })()}
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 w-full overflow-hidden" style={cssVars}>
+      <ConversationsLayout
+        showChatOnMobile={Boolean(selectedConversationId) && !sidebarOpen}
+        list={listPanel}
+        chat={chatPanel}
+      />
+      {folderManagerOpen && (
+        <FolderManagerModal
+          open={folderManagerOpen}
+          onOpenChange={setFolderManagerOpen}
+          tenantId={tenantId}
+          folders={folders ?? []}
+          primaryColor={primaryColor}
+        />
+      )}
     </div>
   );
 }

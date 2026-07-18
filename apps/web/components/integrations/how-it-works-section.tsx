@@ -24,7 +24,7 @@ interface HowItWorksSectionProps {
   primaryColor?: string;
 }
 
-export function HowItWorksSection({ primaryColor = "#197fe6" }: HowItWorksSectionProps) {
+export function HowItWorksSection({ primaryColor = "#dc2626" }: HowItWorksSectionProps) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-6 sm:p-8">
       <h2 className="mb-2 text-lg font-semibold text-slate-900">

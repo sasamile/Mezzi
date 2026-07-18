@@ -552,7 +552,7 @@ export default function AprendizajePage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50">
+    <div className="flex flex-col h-full bg-muted/40/50">
       {/* Encabezado premium */}
 
       {voiceConversation ? (
@@ -622,7 +622,7 @@ export default function AprendizajePage() {
               {voiceError}
             </p>
           )}
-          <p className="mt-6 text-sm text-slate-500 text-center max-w-xs">
+          <p className="mt-6 text-sm text-muted-foreground text-center max-w-xs">
             {voiceState === "idle" &&
               "Toca el micrófono para empezar. Habla y el asistente te responderá por voz."}
             {voiceState === "greeting" && "Iniciando..."}
@@ -636,13 +636,13 @@ export default function AprendizajePage() {
           {lastExchange && (
             <div className="mt-4 w-full max-w-md text-center space-y-1">
               <p
-                className="text-xs text-slate-400 truncate"
+                className="text-xs text-muted-foreground truncate"
                 title={lastExchange.user}
               >
                 Tú: {lastExchange.user}
               </p>
               <p
-                className="text-xs text-slate-500 truncate"
+                className="text-xs text-muted-foreground truncate"
                 title={lastExchange.assistant}
               >
                 Asistente: {lastExchange.assistant}
@@ -666,7 +666,7 @@ export default function AprendizajePage() {
             <button
               type="button"
               onClick={stopVoiceConversation}
-              className="text-sm text-slate-500 hover:text-slate-700"
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
               Salir de conversación por voz
             </button>
@@ -676,8 +676,8 @@ export default function AprendizajePage() {
         <>
           <div className="flex-1 flex min-h-0">
             {/* Columna izquierda: historial */}
-            <aside className="w-64 shrink-0 border-r border-slate-200 bg-white/80 flex flex-col overflow-hidden">
-              <div className="p-3 border-b border-slate-100 space-y-2">
+            <aside className="w-64 shrink-0 border-r border-border bg-card/80 flex flex-col overflow-hidden">
+              <div className="p-3 border-b border-border space-y-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -693,13 +693,13 @@ export default function AprendizajePage() {
                   <MessageSquarePlus className="h-4 w-4" />
                   Nueva conversación
                 </button>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 pt-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1">
                   Historial reciente
                 </h2>
               </div>
               <div className="flex-1 overflow-y-auto p-2">
                 {history.length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">
+                  <p className="text-xs text-muted-foreground p-3">
                     Aún no hay preguntas
                   </p>
                 ) : (
@@ -709,9 +709,9 @@ export default function AprendizajePage() {
                         <button
                           type="button"
                           onClick={() => openHistoryItem(item)}
-                          className="w-full text-left rounded-lg p-2.5 pr-8 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors"
+                          className="w-full text-left rounded-lg p-2.5 pr-8 hover:bg-muted/40 border border-transparent hover:border-border transition-colors"
                         >
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-[10px] text-muted-foreground">
                             {new Date(item.date).toLocaleDateString("es", {
                               day: "numeric",
                               month: "short",
@@ -720,7 +720,7 @@ export default function AprendizajePage() {
                             })}
                           </p>
                           <p
-                            className="text-sm text-slate-700 truncate mt-0.5"
+                            className="text-sm text-foreground truncate mt-0.5"
                             title={item.query}
                           >
                             {item.query}
@@ -733,12 +733,12 @@ export default function AprendizajePage() {
                                   ? "text-emerald-600"
                                   : item.confidence === "medium"
                                     ? "text-amber-600"
-                                    : "text-slate-500",
+                                    : "text-muted-foreground",
                               )}
                             >
                               {confidencePct(item.confidence)}%
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-muted-foreground">
                               Reabrir
                             </span>
                           </div>
@@ -746,7 +746,7 @@ export default function AprendizajePage() {
                         <button
                           type="button"
                           onClick={(e) => deleteHistoryItem(e, item.id)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Eliminar"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -759,7 +759,7 @@ export default function AprendizajePage() {
             </aside>
 
             {/* Columna derecha: chat */}
-            <main className="flex-1 flex flex-col min-w-0 bg-white rounded-l-xl shadow-sm">
+            <main className="flex-1 flex flex-col min-w-0 bg-card rounded-l-xl shadow-sm">
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
                 {messages.length === 0 && !loading && (
                   <div className="flex flex-col items-center justify-center min-h-[280px] text-center">
@@ -772,10 +772,10 @@ export default function AprendizajePage() {
                         style={{ color: "var(--primaryColor)" }}
                       />
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-800">
+                    <h3 className="text-xl font-semibold text-foreground">
                       ¿Qué quieres saber hoy?
                     </h3>
-                    <p className="text-slate-500 mt-1 mb-6 max-w-sm">
+                    <p className="text-muted-foreground mt-1 mb-6 max-w-sm">
                       Escribe o elige una sugerencia. La IA responde con tu base
                       de conocimiento.
                     </p>
@@ -788,7 +788,7 @@ export default function AprendizajePage() {
                           disabled={
                             loading || (usage?.count ?? 0) >= DAILY_LIMIT
                           }
-                          className="px-4 py-2 rounded-full text-sm border border-slate-200 bg-white hover:bg-slate-50 hover:border-(--primaryColor) transition-colors"
+                          className="px-4 py-2 rounded-full text-sm border border-border bg-card hover:bg-muted/40 hover:border-(--primaryColor) transition-colors"
                           style={{ color: "var(--primaryColor)" }}
                         >
                           {s}
@@ -811,7 +811,7 @@ export default function AprendizajePage() {
                         "max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm",
                         m.role === "user"
                           ? "text-white"
-                          : "bg-slate-50 text-slate-800 border border-slate-200/80",
+                          : "bg-muted/40 text-foreground border border-border",
                       )}
                       style={
                         m.role === "user"
@@ -823,11 +823,11 @@ export default function AprendizajePage() {
                       {m.role === "assistant" && (
                         <>
                           {m.confidence != null && (
-                            <div className="mt-3 pt-3 border-t border-slate-200/60">
-                              <p className="text-[10px] text-slate-500 mb-1">
+                            <div className="mt-3 pt-3 border-t border-border/60">
+                              <p className="text-[10px] text-muted-foreground mb-1">
                                 Confianza: {confidenceLabel(m.confidence)}
                               </p>
-                              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                                 <div
                                   className="h-full rounded-full transition-all"
                                   style={{
@@ -844,7 +844,7 @@ export default function AprendizajePage() {
                             </div>
                           )}
                           {m.sources && m.sources.length > 0 && (
-                            <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
+                            <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
                               <FileText className="h-3 w-3" />
                               {m.sources.slice(0, 2).join(", ")}
                               {m.sources.length > 2 &&
@@ -860,7 +860,7 @@ export default function AprendizajePage() {
                                 (playingId !== null && playingId !== i) ||
                                 playingId === -1
                               }
-                              className="size-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                              className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
                               title="Reproducir"
                             >
                               <Volume2 className="h-4 w-4" />
@@ -868,7 +868,7 @@ export default function AprendizajePage() {
                             <button
                               type="button"
                               onClick={() => copyToClipboard(m.content)}
-                              className="size-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
+                              className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                               title="Copiar"
                             >
                               <Copy className="h-4 w-4" />
@@ -877,13 +877,13 @@ export default function AprendizajePage() {
                               type="button"
                               onClick={() => regenerateReply(i)}
                               disabled={loading}
-                              className="size-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                              className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
                               title="Regenerar"
                             >
                               <RefreshCw className="h-4 w-4" />
                             </button>
                             {m.sources && m.sources.length > 0 && (
-                              <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                                 <FileText className="h-3 w-3" />
                                 Fuentes
                               </span>
@@ -897,17 +897,17 @@ export default function AprendizajePage() {
 
                 {loading && (
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-slate-100 border border-slate-200">
+                    <div className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-muted border border-border">
                       <span className="flex gap-1">
                         {[0, 1, 2].map((j) => (
                           <span
                             key={j}
-                            className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce"
+                            className="w-1.5 h-1.5 rounded-full bg-muted/400 animate-bounce"
                             style={{ animationDelay: `${j * 0.15}s` }}
                           />
                         ))}
                       </span>
-                      <span className="text-sm text-slate-600">
+                      <span className="text-sm text-muted-foreground">
                         IA pensando…
                       </span>
                     </div>
@@ -917,7 +917,7 @@ export default function AprendizajePage() {
               </div>
 
               {/* Input avanzado */}
-              <footer className="shrink-0 border-t border-slate-200 p-4 bg-slate-50/50">
+              <footer className="shrink-0 border-t border-border p-4 bg-muted/40/50">
                 {submitError && (
                   <p className="text-sm text-red-600 mb-2 px-1">
                     {submitError}
@@ -925,7 +925,7 @@ export default function AprendizajePage() {
                 )}
                 <form
                   onSubmit={(e) => handleSubmit(e)}
-                  className="flex items-end gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-sm focus-within:ring-2 focus-within:ring-offset-2 transition-shadow focus-within:ring-(--primaryColor)"
+                  className="flex items-end gap-2 p-2 rounded-xl bg-card border border-border shadow-sm focus-within:ring-2 focus-within:ring-offset-2 transition-shadow focus-within:ring-(--primaryColor)"
                 >
                   <button
                     type="button"
@@ -935,7 +935,7 @@ export default function AprendizajePage() {
                       "size-10 shrink-0 rounded-lg flex items-center justify-center transition-colors",
                       isListening
                         ? "bg-red-100 text-red-600"
-                        : "text-slate-500 hover:bg-slate-100",
+                        : "text-muted-foreground hover:bg-muted",
                     )}
                     title={isListening ? "Detener" : "Hablar"}
                   >
@@ -951,7 +951,7 @@ export default function AprendizajePage() {
                       e.key === "Enter" && !e.shiftKey && handleSubmit(e)
                     }
                     placeholder="Pregunta algo sobre tu negocio…"
-                    className="flex-1 min-h-[44px] py-2 px-3 bg-transparent border-none text-slate-800 text-sm placeholder:text-slate-400 focus:outline-none"
+                    className="flex-1 min-h-[44px] py-2 px-3 bg-transparent border-none text-foreground text-sm placeholder:text-muted-foreground focus:outline-none"
                     disabled={
                       !tenantId || loading || (usage?.count ?? 0) >= DAILY_LIMIT
                     }
@@ -981,7 +981,7 @@ export default function AprendizajePage() {
                       "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                       voiceConversation
                         ? "text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                        : "bg-muted text-muted-foreground hover:bg-muted",
                     )}
                     style={
                       voiceConversation

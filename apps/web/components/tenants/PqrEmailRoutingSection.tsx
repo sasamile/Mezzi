@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Mail, RotateCcw } from "lucide-react";
+import { Check, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   defaultRoutingFormRows,
@@ -10,17 +10,25 @@ import {
   type PqrRoutingFormRow,
   type PqrRoutingRule,
 } from "@/lib/pqr-routing";
+import {
+  SettingsField,
+  settingsControlClass,
+} from "@/components/settings/settings-field";
+import { sileo } from "@/lib/toast";
 
 type Props = {
   primaryColor: string;
   initialRouting?: PqrRoutingRule[] | null;
   onSave: (routing: PqrRoutingRule[]) => Promise<void>;
+  /** Cuando va dentro de SettingsSection — oculta el encabezado duplicado. */
+  embedded?: boolean;
 };
 
 export function PqrEmailRoutingSection({
   primaryColor,
   initialRouting,
   onSave,
+  embedded = false,
 }: Props) {
   const [rows, setRows] = React.useState<PqrRoutingFormRow[]>(() =>
     routingFromTenant(initialRouting)
@@ -55,86 +63,129 @@ export function PqrEmailRoutingSection({
     try {
       await onSave(routingToPayload(rows));
       setSaved(true);
+      sileo.success({
+        title: "Correos guardados",
+        description: "El enrutamiento de PQR se actualizó correctamente.",
+      });
       setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      sileo.error({
+        title: "Error al guardar",
+        description:
+          err instanceof Error ? err.message : "No se pudo guardar.",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <Mail className="size-5" strokeWidth={1.7} />
-            Correos por categoría de PQR
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Cada tipo de solicitud se envía al correo correspondiente. Separa varios
-            correos con coma. El cliente recibe copia (CC) si dejó email en la PQR.
-          </p>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {!embedded && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              Correos por categoría de PQR
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Cada tipo de solicitud se envía al correo correspondiente. El
+              cliente recibe copia (CC) si dejó email en la PQR.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRestoreDefaults}
+            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <RotateCcw size={14} strokeWidth={1.7} />
+            Restaurar plantilla
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleRestoreDefaults}
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          <RotateCcw className="size-4" />
-          Restaurar plantilla
-        </button>
-      </div>
+      )}
 
       <div className="space-y-3">
         {rows.map((row) => (
           <div
             key={row.rowKey}
-            className="rounded-xl border border-slate-200 bg-slate-50/40 p-4"
+            className="rounded-lg border border-border bg-muted/30 p-4"
           >
-            <p className="mb-3 text-sm font-semibold text-slate-800">{row.label}</p>
+            <p className="mb-3 text-sm font-medium text-foreground">
+              {row.label}
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Para (destinatarios) *
-                </label>
+              <SettingsField
+                id={`${row.rowKey}-to`}
+                label="Para"
+                required
+              >
                 <input
+                  id={`${row.rowKey}-to`}
                   type="text"
                   value={row.to}
-                  onChange={(e) => updateRow(row.rowKey, "to", e.target.value)}
+                  onChange={(e) =>
+                    updateRow(row.rowKey, "to", e.target.value)
+                  }
                   placeholder="correo@empresa.com"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  className={settingsControlClass}
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Copia (CC) — opcional
-                </label>
+              </SettingsField>
+              <SettingsField id={`${row.rowKey}-cc`} label="Copia (CC)">
                 <input
+                  id={`${row.rowKey}-cc`}
                   type="text"
                   value={row.cc}
-                  onChange={(e) => updateRow(row.rowKey, "cc", e.target.value)}
+                  onChange={(e) =>
+                    updateRow(row.rowKey, "cc", e.target.value)
+                  }
                   placeholder="copia@empresa.com"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  className={settingsControlClass}
                 />
-              </div>
+              </SettingsField>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-wrap items-center gap-3 pt-1">
         <button
           type="submit"
           disabled={saving}
           className={cn(
-            "rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-all disabled:opacity-60",
+            "inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-opacity disabled:opacity-60",
             saved && "bg-emerald-600"
           )}
-          style={!saved ? { backgroundColor: primaryColor } : undefined}
+          style={
+            !saved ? { backgroundColor: primaryColor } : undefined
+          }
         >
-          {saving ? "Guardando…" : saved ? "Correos guardados" : "Guardar correos"}
+          {saving ? (
+            <>
+              <Loader2 size={15} className="animate-spin" strokeWidth={1.7} />
+              Guardando…
+            </>
+          ) : saved ? (
+            <>
+              <Check size={15} strokeWidth={2} />
+              Guardado
+            </>
+          ) : (
+            "Guardar correos"
+          )}
         </button>
+        {embedded && (
+          <button
+            type="button"
+            onClick={handleRestoreDefaults}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <RotateCcw size={14} strokeWidth={1.7} />
+            Restaurar plantilla
+          </button>
+        )}
         {saved && (
-          <span className="text-sm text-emerald-600">Configuración aplicada</span>
+          <span className="text-sm text-muted-foreground">
+            Configuración aplicada
+          </span>
         )}
       </div>
     </form>

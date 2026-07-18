@@ -67,11 +67,10 @@ export function UserCardRow({
   return (
     <div
       className={cn(
-        "group flex items-center gap-4 rounded-xl border border-slate-200/80 bg-white px-5 py-4 transition-all duration-200",
-        "hover:border-slate-300/80 hover:shadow-sm"
+        "group flex items-center gap-4 rounded-xl border border-border bg-background px-5 py-4 transition-colors duration-150",
+        "hover:bg-muted/50"
       )}
     >
-      {/* Avatar + info */}
       <div className="flex min-w-0 flex-1 items-center gap-4">
         <div className="relative shrink-0">
           <div
@@ -84,21 +83,21 @@ export function UserCardRow({
           </div>
           {status === "active" && (
             <span
-              className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500"
+              className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background bg-emerald-500"
               title="Activo"
             />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-slate-900 truncate">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-semibold text-foreground">
               {member.user?.name ?? "—"}
             </span>
             {member.role === "OWNER" && (
               <span
-                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
                 style={{
-                  backgroundColor: `${primaryColor}20`,
+                  backgroundColor: `${primaryColor}22`,
                   color: primaryColor,
                 }}
               >
@@ -106,59 +105,56 @@ export function UserCardRow({
               </span>
             )}
             {status === "pending" && (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              <span className="shrink-0 rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
                 Pendiente
               </span>
             )}
             {status === "disabled" && (
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+              <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                 Sin acceso
               </span>
             )}
           </div>
-          <p className="mt-0.5 truncate text-sm text-slate-500">
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {member.user?.email ?? "—"}
           </p>
         </div>
       </div>
 
-      {/* Role badge */}
       <div className="shrink-0">
         <span
           className={cn(
-            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
+            "inline-flex rounded-md px-2.5 py-1 text-xs font-medium",
             member.role === "OWNER"
-              ? "text-slate-700"
-              : "bg-slate-100 text-slate-700"
+              ? "text-muted-foreground"
+              : "bg-muted text-muted-foreground"
           )}
         >
           {ROLE_LABELS[member.role] ?? member.role}
         </span>
       </div>
 
-      {/* Last activity */}
-      <div className="hidden sm:block w-28 shrink-0 text-right text-xs text-slate-500">
+      <div className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground sm:block">
         {status === "active"
-          ? formatRelativeTime(member.createdAt * 1000)
+          ? formatRelativeTime(member.createdAt)
           : status === "pending"
             ? "Invitación enviada"
             : "—"}
       </div>
 
-      {/* Actions */}
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={() => onChangeRole(member)}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+          className="h-8 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         >
-          Cambiar rol
+          Editar
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Más opciones"
             >
               <MoreHorizontal className="size-4" />
@@ -166,7 +162,7 @@ export function UserCardRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem
-              className="text-red-600 focus:text-red-600 cursor-pointer"
+              className="cursor-pointer text-destructive focus:text-destructive"
               onSelect={() => onRemoveAccess(member)}
             >
               <UserMinus className="size-4" />

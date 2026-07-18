@@ -1,11 +1,13 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { Search, UserPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserCardRow } from "@/components/users/user-card-row";
@@ -24,7 +26,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const DEFAULT_PRIMARY = "#197fe6";
 const USERS_PER_PAGE = 10;
 
 type Member = {
@@ -33,6 +34,7 @@ type Member = {
   tenantId: Id<"tenants">;
   role: string;
   allowedPages?: string[];
+  allowedFolders?: string[];
   createdAt: number;
   user: { name: string; email: string } | null;
 };
@@ -55,14 +57,20 @@ export default function UsersPage() {
     api.users.listByTenant,
     tenantId ? { tenantId } : "skip"
   );
+  const folders = useQuery(
+    api.conversationFolders.listByTenant,
+    tenantId ? { tenantId } : "skip"
+  );
 
   const createUser = useMutation(api.users.create);
   const inviteToTenant = useMutation(api.users.inviteToTenant);
   const updateRole = useMutation(api.users.updateRole);
   const updatePermissions = useMutation(api.users.updatePermissions);
+  const updateFolderPermissions = useMutation(api.users.updateFolderPermissions);
+  const updateMemberProfile = useMutation(api.users.updateMemberProfile);
   const removeFromTenant = useMutation(api.users.removeFromTenant);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
   const memberships = (members ?? []) as Member[];
 
   const filteredAndSorted = React.useMemo(() => {
@@ -104,23 +112,42 @@ export default function UsersPage() {
     setPage(1);
   }, [searchQuery, roleFilter, sortBy]);
 
-  const handleSaveRole = async (
-    userTenantId: Id<"userTenants">,
-    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER" | "HR",
-    allowedPages: string[]
-  ) => {
+  const handleSaveUser = async (data: {
+    userId: Id<"users">;
+    userTenantId: Id<"userTenants">;
+    name: string;
+    email: string;
+    password?: string;
+    role: "OWNER" | "ADMIN" | "AGENT" | "VIEWER" | "HR";
+    allowedPages: string[];
+    allowedFolders: string[] | undefined;
+  }) => {
     try {
-      await updateRole({ userTenantId, role });
-      await updatePermissions({ userTenantId, allowedPages });
+      await updateMemberProfile({
+        userId: data.userId,
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      });
+      await updateRole({ userTenantId: data.userTenantId, role: data.role });
+      await updatePermissions({
+        userTenantId: data.userTenantId,
+        allowedPages: data.allowedPages,
+      });
+      await updateFolderPermissions({
+        userTenantId: data.userTenantId,
+        allowedFolders: data.allowedFolders,
+      });
       sileo.success({
         title: "Usuario actualizado",
-        description: "Rol y permisos guardados correctamente.",
+        description: "Datos, rol y permisos guardados correctamente.",
       });
       setChangeRoleMember(null);
     } catch (err) {
       sileo.error({
         title: "Error",
-        description: err instanceof Error ? err.message : "No se pudo actualizar el rol.",
+        description:
+          err instanceof Error ? err.message : "No se pudo actualizar.",
       });
       throw err;
     }
@@ -174,28 +201,28 @@ export default function UsersPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando…</p>
+        <p className="text-muted-foreground">Cargando…</p>
       </div>
     );
   }
 
   return (
     <div
-      className="flex min-h-full flex-col overflow-y-auto bg-slate-50"
+      className="flex min-h-full flex-col overflow-y-auto bg-muted/40"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6 sm:p-8 md:p-10">
+      <div className="w-full flex-1 p-4 md:p-6 lg:p-8">
         {/* Header */}
         <header className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Usuarios & Permisos
               </h1>
-              <p className="mt-2 text-base text-slate-500 sm:text-lg">
+              <p className="mt-2 text-base text-muted-foreground sm:text-lg">
                 Gestiona quién puede acceder y qué puede hacer dentro de este restaurante.
               </p>
-              <p className="mt-2 text-sm font-medium text-slate-600">
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
                 {memberships.length} usuario{memberships.length !== 1 ? "s" : ""} activo
                 {memberships.length !== 1 ? "s" : ""}
               </p>
@@ -216,7 +243,7 @@ export default function UsersPage() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm">
             <Search
-              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400"
+              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               strokeWidth={2}
             />
             <input
@@ -224,14 +251,14 @@ export default function UsersPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar usuario…"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="all">Todos los roles</option>
               {["OWNER", "ADMIN", "AGENT", "VIEWER", "HR"].map((r) => (
@@ -251,7 +278,7 @@ export default function UsersPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as "name" | "activity")}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="activity">Ordenar por actividad</option>
               <option value="name">Ordenar por nombre</option>
@@ -262,20 +289,20 @@ export default function UsersPage() {
         <div className="grid gap-8 lg:grid-cols-[1fr,minmax(320px,380px)]">
           {/* User list */}
           <section>
-            <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 px-5 py-3">
-                <h2 className="text-sm font-semibold text-slate-800">
+            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="border-b border-border px-5 py-3">
+                <h2 className="text-sm font-semibold text-foreground">
                   Usuarios con acceso
                 </h2>
               </div>
               <div className="space-y-3 p-4 sm:p-5">
                 {members === undefined ? (
-                  <div className="py-12 text-center text-sm text-slate-500">
+                  <div className="py-12 text-center text-sm text-muted-foreground">
                     Cargando…
                   </div>
                 ) : filteredAndSorted.length === 0 ? (
                   searchQuery || roleFilter !== "all" ? (
-                    <div className="py-12 text-center text-sm text-slate-500">
+                    <div className="py-12 text-center text-sm text-muted-foreground">
                       No hay usuarios que coincidan con los filtros.
                     </div>
                   ) : (
@@ -297,8 +324,8 @@ export default function UsersPage() {
                       />
                     ))}
                     {totalPages > 1 && (
-                      <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
-                        <p className="text-sm text-slate-500">
+                      <div className="flex flex-col items-center justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
+                        <p className="text-sm text-muted-foreground">
                           {(safePage - 1) * USERS_PER_PAGE + 1}–
                           {Math.min(safePage * USERS_PER_PAGE, totalItems)} de {totalItems} usuario
                           {totalItems !== 1 ? "s" : ""}
@@ -308,19 +335,19 @@ export default function UsersPage() {
                             type="button"
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={safePage <= 1}
-                            className="inline-flex size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-50"
+                            className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
                             aria-label="Página anterior"
                           >
                             <ChevronLeft className="size-5" />
                           </button>
-                          <span className="flex items-center gap-1 px-2 text-sm text-slate-600">
+                          <span className="flex items-center gap-1 px-2 text-sm text-muted-foreground">
                             Página {safePage} de {totalPages}
                           </span>
                           <button
                             type="button"
                             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                             disabled={safePage >= totalPages}
-                            className="inline-flex size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-50"
+                            className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50"
                             aria-label="Página siguiente"
                           >
                             <ChevronRight className="size-5" />
@@ -348,21 +375,26 @@ export default function UsersPage() {
         primaryColor={primaryColor}
         enabledModules={tenant?.enabledModules}
         tenant={tenant}
+        folders={folders ?? []}
         onCreateUser={handleCreateUser}
       />
 
-      {changeRoleMember && (
+      {changeRoleMember && changeRoleMember.user && (
         <ChangeRoleModal
           open={!!changeRoleMember}
           onOpenChange={(open) => !open && setChangeRoleMember(null)}
-          userName={changeRoleMember.user?.name ?? "Usuario"}
+          userId={changeRoleMember.userId}
+          userName={changeRoleMember.user.name ?? "Usuario"}
+          userEmail={changeRoleMember.user.email ?? ""}
           currentRole={changeRoleMember.role}
           currentAllowedPages={changeRoleMember.allowedPages}
+          currentAllowedFolders={changeRoleMember.allowedFolders}
+          folders={folders ?? []}
           enabledModules={tenant?.enabledModules}
           tenant={tenant}
           userTenantId={changeRoleMember._id}
           primaryColor={primaryColor}
-          onSave={handleSaveRole}
+          onSave={handleSaveUser}
         />
       )}
 
@@ -379,10 +411,7 @@ export default function UsersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveAccess}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <AlertDialogAction onClick={handleRemoveAccess}>
               Quitar acceso
             </AlertDialogAction>
           </AlertDialogFooter>

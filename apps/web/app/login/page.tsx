@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { useMutation } from "convex/react";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
@@ -23,7 +23,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import {
   DashedGridBackground,
@@ -172,19 +171,20 @@ function LoginContent() {
     return (
       <div className="relative flex min-h-screen items-center justify-center px-4">
         <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
-        <p className="relative z-10 text-slate-600">Cargando...</p>
+        <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
       </div>
     );
   }
 
   const useGridBackground = branding.sidePanel === "dashed-grid";
+  const accent = branding.accentColor ?? "#dc2626";
 
   return (
     <div
       className={
         useGridBackground
           ? "relative flex min-h-screen w-full items-center justify-center px-4 py-10"
-          : "flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 via-zinc-50 to-red-50 px-4 py-10"
+          : "flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-10"
       }
     >
       {useGridBackground && (
@@ -193,13 +193,13 @@ function LoginContent() {
       <div
         className={
           useGridBackground
-            ? "relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)]"
-            : "grid min-h-[80vh] w-full max-w-5xl grid-cols-1 overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] md:grid-cols-2"
+            ? "relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 shadow-md sm:p-8 [color-scheme:light]"
+            : "grid min-h-[80vh] w-full max-w-5xl grid-cols-1 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-md [color-scheme:light] md:grid-cols-2"
         }
       >
-        <div className="flex items-center px-6 py-8 sm:px-10">
-          <div className="w-full max-w-sm space-y-8">
-            <div className="space-y-4">
+        <div className="flex items-center px-2 py-4 sm:px-6 sm:py-8">
+          <div className="w-full max-w-sm space-y-7">
+            <div className="space-y-3">
               <div className="flex justify-center px-2">
                 <Image
                   src={logoSrc}
@@ -212,11 +212,7 @@ function LoginContent() {
                     const fallback = getLoginBranding(hostname, null).logoSrc;
                     if (fallback && fallback !== logoSrc) setLogoSrc(fallback);
                   }}
-                  className={
-                    useGridBackground
-                      ? "h-auto w-full max-w-[220px] object-contain"
-                      : "h-auto w-full max-w-[240px] object-contain"
-                  }
+                  className="h-auto w-full max-w-[200px] object-contain"
                 />
               </div>
               <p className="text-center text-sm text-zinc-500">
@@ -225,18 +221,21 @@ function LoginContent() {
             </div>
 
             <Form {...form}>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 <FormField
                   control={form.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Correo electrónico</FormLabel>
+                      <FormLabel className="text-zinc-800">
+                        Correo electrónico
+                      </FormLabel>
                       <FormControl>
                         <Input
                           type="email"
                           placeholder="tu@restaurante.com"
                           autoComplete="email"
+                          className="border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
                           {...field}
                         />
                       </FormControl>
@@ -250,20 +249,20 @@ function LoginContent() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contraseña</FormLabel>
+                      <FormLabel className="text-zinc-800">Contraseña</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
                             placeholder="••••••••"
                             autoComplete="current-password"
-                            className="pr-10"
+                            className="border-zinc-200 bg-zinc-50 pr-10 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
                             {...field}
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword((prev) => !prev)}
-                            className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 hover:text-zinc-600"
+                            className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 transition-colors hover:text-zinc-700"
                             aria-label={
                               showPassword
                                 ? "Ocultar contraseña"
@@ -283,27 +282,15 @@ function LoginContent() {
                   )}
                 />
 
-                <div className="pt-2">
-                  <Button
+                <div className="pt-1">
+                  <button
                     type="submit"
-                    variant={branding.accentColor ? "ghost" : "default"}
                     disabled={isSubmitting}
-                    className={
-                      branding.accentColor
-                        ? "h-11 w-full rounded-2xl px-4 !text-white hover:!text-white hover:opacity-90"
-                        : "h-11 w-full rounded-2xl px-4"
-                    }
-                    style={
-                      branding.accentColor
-                        ? {
-                            backgroundColor: branding.accentColor,
-                            color: "#ffffff",
-                          }
-                        : undefined
-                    }
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    style={{ backgroundColor: accent }}
                   >
-                    {isSubmitting ? "Entrando..." : "Iniciar sesión"}
-                  </Button>
+                    {isSubmitting ? "Entrando…" : "Iniciar sesión"}
+                  </button>
                 </div>
               </form>
             </Form>
@@ -316,7 +303,7 @@ function LoginContent() {
               src={branding.sideImageSrc}
               alt={branding.sideImageAlt}
               fill
-              className="rounded-3xl object-cover object-top"
+              className="rounded-2xl object-cover object-top"
             />
           </div>
         )}
@@ -331,7 +318,7 @@ export default function LoginPage() {
       fallback={
         <div className="relative flex min-h-screen items-center justify-center px-4">
           <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
-          <p className="relative z-10 text-slate-600">Cargando...</p>
+          <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
         </div>
       }
     >

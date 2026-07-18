@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 
 export type PlanFormState = {
   name: string;

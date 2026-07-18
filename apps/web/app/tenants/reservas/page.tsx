@@ -1,5 +1,7 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import * as React from "react";
 import { Suspense } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -22,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Settings, Users, Smartphone, Store, Clock } from "lucide-react";
 
-const DEFAULT_PRIMARY = "#197fe6";
 const DEFAULT_SECONDARY = "#06b6d4";
 
 function getDayStart(d: Date) {
@@ -140,7 +141,7 @@ function ReservasContent() {
   const freeTable = useMutation(api.reservations.freeTable);
   const importFromGoogle = useAction(api.googleCalendarImport.importFromGoogle);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
   const secondaryColor = tenant?.secondaryColor ?? DEFAULT_SECONDARY;
 
   const todayStart = getDayStart(new Date());
@@ -366,7 +367,7 @@ function ReservasContent() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando...</p>
+        <p className="text-muted-foreground">Cargando...</p>
       </div>
     );
   }
@@ -381,7 +382,7 @@ function ReservasContent() {
         } as React.CSSProperties
       }
     >
-      <div className="mx-auto max-w-[1600px] space-y-6">
+      <div className="w-full space-y-6 p-4 md:p-6 lg:p-8">
         {showGoogleBanner && googleStatus === "connected" && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             Google Calendar conectado. Las reservas se sincronizarán automáticamente.
@@ -413,39 +414,39 @@ function ReservasContent() {
         />
 
         {/* Indicador de cupos + botón configurar */}
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
           <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Users className="h-4 w-4 text-slate-400" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Users className="h-4 w-4 text-muted-foreground" />
               <span>Total/día:</span>
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-foreground">
                 {counts.scopeTotal}
-                <span className="font-normal text-slate-400">
+                <span className="font-normal text-muted-foreground">
                   {" "}/ {config?.maxReservationsPerDay ?? 20}
                 </span>
               </span>
             </div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <Smartphone className="h-4 w-4 text-slate-400" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Smartphone className="h-4 w-4 text-muted-foreground" />
               <span>WhatsApp:</span>
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-foreground">
                 {counts.scopeVirtual}
-                <span className="font-normal text-slate-400">
+                <span className="font-normal text-muted-foreground">
                   {" "}/ {config?.maxVirtualPerDay ?? 10}
                 </span>
               </span>
             </div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <Store className="h-4 w-4 text-slate-400" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Store className="h-4 w-4 text-muted-foreground" />
               <span>Presencial:</span>
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-foreground">
                 {counts.scopePresencial} / {config?.maxPresencialPerDay ?? 15}
               </span>
             </div>
           </div>
           <button
             onClick={() => setConfigOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
           >
             <Settings className="h-3.5 w-3.5" />
             Configurar cupos
@@ -507,35 +508,35 @@ function ReservasContent() {
 
       {/* Modal editar reserva */}
       <Dialog open={editReservationOpen} onOpenChange={setEditReservationOpen}>
-        <DialogContent className="max-w-md border-slate-200 bg-white">
+        <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Editar reserva</DialogTitle>
+            <DialogTitle className="text-foreground">Editar reserva</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSaveEditReservation} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Fecha</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Fecha</label>
                 <input
                   type="date"
                   required
                   value={editReservationForm.date}
                   onChange={(e) => setEditReservationForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Hora</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Hora</label>
                 <input
                   type="time"
                   required
                   value={editReservationForm.time}
                   onChange={(e) => setEditReservationForm((f) => ({ ...f, time: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Duración (min)</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Duración (min)</label>
               <input
                 type="number"
                 min={30}
@@ -547,73 +548,73 @@ function ReservasContent() {
                     durationMinutes: parseInt(e.target.value, 10) || 120,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Nombre *</label>
               <input
                 type="text"
                 required
                 value={editReservationForm.customerName}
                 onChange={(e) => setEditReservationForm((f) => ({ ...f, customerName: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Personas</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Personas</label>
                 <input
                   type="number"
                   min={1}
                   max={500}
                   value={editReservationForm.numberOfPeople}
                   onChange={(e) => setEditReservationForm((f) => ({ ...f, numberOfPeople: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Mesa / Zona</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Mesa / Zona</label>
                 <input
                   type="text"
                   value={editReservationForm.tableNumber}
                   onChange={(e) => setEditReservationForm((f) => ({ ...f, tableNumber: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Teléfono</label>
               <input
                 type="tel"
                 value={editReservationForm.customerPhone}
                 onChange={(e) => setEditReservationForm((f) => ({ ...f, customerPhone: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Email</label>
               <input
                 type="email"
                 value={editReservationForm.customerEmail}
                 onChange={(e) => setEditReservationForm((f) => ({ ...f, customerEmail: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Observaciones</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Observaciones</label>
               <textarea
                 rows={2}
                 value={editReservationForm.notes}
                 onChange={(e) => setEditReservationForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full resize-none rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <DialogFooter className="gap-2 pt-4">
               <button
                 type="button"
                 onClick={() => setEditReservationOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/40"
               >
                 Cancelar
               </button>
@@ -632,26 +633,26 @@ function ReservasContent() {
 
       {/* Dialog configuración de cupos */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
-        <DialogContent className="max-w-md border-slate-200 bg-white">
+        <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
+            <DialogTitle className="flex items-center gap-2 text-foreground">
               <Settings className="h-4 w-4" />
               Configurar cupos de reservas
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSaveConfig} className="space-y-5 pt-1">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Define cuántas reservas se pueden aceptar por día. El bot de WhatsApp
               respetará estos límites automáticamente.
             </p>
 
             {/* Total por día */}
-            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+            <div className="rounded-xl border border-border p-4 space-y-1">
               <div className="flex items-center gap-2 mb-2">
-                <Users className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Límite total por día</span>
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Límite total por día</span>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
+              <p className="text-xs text-muted-foreground mb-3">
                 Máximo de reservas (WhatsApp + presenciales) que se aceptan en un día.
               </p>
               <input
@@ -666,17 +667,17 @@ function ReservasContent() {
                     maxReservationsPerDay: parseInt(e.target.value, 10) || 1,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
 
             {/* WhatsApp */}
-            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+            <div className="rounded-xl border border-border p-4 space-y-1">
               <div className="flex items-center gap-2 mb-2">
-                <Smartphone className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Límite por WhatsApp / chat</span>
+                <Smartphone className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Límite por WhatsApp / chat</span>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
+              <p className="text-xs text-muted-foreground mb-3">
                 Reservas que el bot puede crear vía WhatsApp por día.
               </p>
               <input
@@ -691,17 +692,17 @@ function ReservasContent() {
                     maxVirtualPerDay: parseInt(e.target.value, 10) || 0,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
 
             {/* Presencial */}
-            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+            <div className="rounded-xl border border-border p-4 space-y-1">
               <div className="flex items-center gap-2 mb-2">
-                <Store className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Límite presencial</span>
+                <Store className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Límite presencial</span>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
+              <p className="text-xs text-muted-foreground mb-3">
                 Reservas creadas manualmente desde el panel por día.
               </p>
               <input
@@ -716,17 +717,17 @@ function ReservasContent() {
                     maxPresencialPerDay: parseInt(e.target.value, 10) || 0,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
 
             {/* Duración por defecto */}
-            <div className="rounded-xl border border-slate-200 p-4 space-y-1">
+            <div className="rounded-xl border border-border p-4 space-y-1">
               <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Duración por defecto (minutos)</span>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Duración por defecto (minutos)</span>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
+              <p className="text-xs text-muted-foreground mb-3">
                 Tiempo reservado por mesa si no se especifica otro.
               </p>
               <input
@@ -742,7 +743,7 @@ function ReservasContent() {
                     defaultDurationMinutes: parseInt(e.target.value, 10) || 120,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
 
@@ -750,7 +751,7 @@ function ReservasContent() {
               <button
                 type="button"
                 onClick={() => setConfigOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/40"
               >
                 Cancelar
               </button>
@@ -769,35 +770,35 @@ function ReservasContent() {
 
       {/* Modal nueva reserva */}
       <Dialog open={newReservationOpen} onOpenChange={setNewReservationOpen}>
-        <DialogContent className="max-w-md border-slate-200 bg-white">
+        <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Nueva reserva</DialogTitle>
+            <DialogTitle className="text-foreground">Nueva reserva</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateReservation} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Fecha</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Fecha</label>
                 <input
                   type="date"
                   required
                   value={newReservationForm.date}
                   onChange={(e) => setNewReservationForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Hora</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Hora</label>
                 <input
                   type="time"
                   required
                   value={newReservationForm.time}
                   onChange={(e) => setNewReservationForm((f) => ({ ...f, time: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Duración (min)</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Duración (min)</label>
               <input
                 type="number"
                 min={30}
@@ -809,33 +810,33 @@ function ReservasContent() {
                     durationMinutes: parseInt(e.target.value, 10) || 120,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre *</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Nombre *</label>
               <input
                 type="text"
                 required
                 value={newReservationForm.customerName}
                 onChange={(e) => setNewReservationForm((f) => ({ ...f, customerName: e.target.value }))}
                 placeholder="Ej. Juan Pérez"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Teléfono</label>
               <input
                 type="tel"
                 value={newReservationForm.customerPhone}
                 onChange={(e) => setNewReservationForm((f) => ({ ...f, customerPhone: e.target.value }))}
                 placeholder="+34 612 345 678"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Personas *</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Personas *</label>
                 <input
                   type="number"
                   required
@@ -844,35 +845,35 @@ function ReservasContent() {
                   value={newReservationForm.numberOfPeople}
                   onChange={(e) => setNewReservationForm((f) => ({ ...f, numberOfPeople: e.target.value }))}
                   placeholder="Ej. 4"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Mesa / Zona</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Mesa / Zona</label>
                 <input
                   type="text"
                   value={newReservationForm.tableNumber}
                   onChange={(e) => setNewReservationForm((f) => ({ ...f, tableNumber: e.target.value }))}
                   placeholder="Ej. Party 1, Mesa 4"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5"
+                  className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Observaciones</label>
+              <label className="mb-1 block text-sm font-medium text-foreground">Observaciones</label>
               <textarea
                 rows={2}
                 value={newReservationForm.notes}
                 onChange={(e) => setNewReservationForm((f) => ({ ...f, notes: e.target.value }))}
                 placeholder="Ej. Cumpleaños, decoración de aniversario, solicitud especial…"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5 resize-none"
+                className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5 resize-none"
               />
             </div>
             <DialogFooter className="gap-2 pt-4">
               <button
                 type="button"
                 onClick={() => setNewReservationOpen(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/40"
               >
                 Cancelar
               </button>
@@ -897,7 +898,7 @@ export default function ReservasPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[40vh] items-center justify-center">
-          <p className="text-slate-500">Cargando Reservas…</p>
+          <p className="text-muted-foreground">Cargando Reservas…</p>
         </div>
       }
     >

@@ -300,6 +300,7 @@ export async function applyOpenClawSideEffect(
             subject,
             description,
             source: "whatsapp",
+            conversationId,
           });
           const pqrDoc = await ctx.runQuery(api.pqrs.get, { pqrId });
           const ticket = pqrDoc?.ticketNumber ?? String(Date.now()).slice(-6);

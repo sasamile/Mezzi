@@ -53,7 +53,7 @@ function PdfRow({
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-red-50">
         <FileText className="h-5 w-5 text-red-500" />
       </div>
@@ -72,7 +72,7 @@ function PdfRow({
                   setLabelValue(pdf.label);
                 }
               }}
-              className="flex-1 rounded-lg border border-blue-300 px-2 py-1 text-sm font-medium text-slate-800 ring-1 ring-blue-400 outline-none"
+              className="flex-1 rounded-lg border border-blue-300 px-2 py-1 text-sm font-medium text-foreground ring-1 ring-blue-400 outline-none"
             />
             <button
               onClick={handleRename}
@@ -83,23 +83,23 @@ function PdfRow({
             </button>
             <button
               onClick={() => { setEditing(false); setLabelValue(pdf.label); }}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 transition-colors"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-800">{pdf.label}</span>
+            <span className="font-medium text-foreground">{pdf.label}</span>
             <button
               onClick={() => setEditing(true)}
-              className="rounded p-0.5 text-slate-300 hover:text-slate-500 transition-colors"
+              className="rounded p-0.5 text-slate-300 hover:text-muted-foreground transition-colors"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
-        <p className="truncate text-xs text-slate-400 mt-0.5">{pdf.fileName}</p>
+        <p className="truncate text-xs text-muted-foreground mt-0.5">{pdf.fileName}</p>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -108,7 +108,7 @@ function PdfRow({
             href={pdf.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             Ver
@@ -207,8 +207,8 @@ export default function DocumentosPage() {
     <div className="max-w-2xl mx-auto py-10 px-4 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Documentos PDF</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-foreground">Documentos PDF</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Sube PDFs que el bot puede enviar por WhatsApp cuando el cliente los pida:
           menú, carta de decoraciones, promociones, etc.
         </p>
@@ -220,10 +220,10 @@ export default function DocumentosPage() {
           <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
         </div>
       ) : pdfs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+        <div className="rounded-xl border border-dashed border-slate-300 bg-muted/40 px-6 py-10 text-center">
           <FileText className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-sm font-medium text-slate-500">Sin documentos aún</p>
-          <p className="text-xs text-slate-400 mt-1">Agrega tu primer PDF abajo.</p>
+          <p className="text-sm font-medium text-muted-foreground">Sin documentos aún</p>
+          <p className="text-xs text-muted-foreground mt-1">Agrega tu primer PDF abajo.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -239,14 +239,14 @@ export default function DocumentosPage() {
       )}
 
       {/* Zona de carga */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-semibold text-slate-700">Agregar nuevo documento</span>
+          <span className="text-sm font-semibold text-foreground">Agregar nuevo documento</span>
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-muted-foreground">
             Nombre del documento <span className="text-red-400">*</span>
           </label>
           <input
@@ -255,9 +255,9 @@ export default function DocumentosPage() {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             disabled={uploading}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 ring-1 ring-slate-900/5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Este nombre es el que usa el bot para identificar y enviar el documento.
           </p>
         </div>
@@ -281,7 +281,7 @@ export default function DocumentosPage() {
             fileInputRef.current?.click();
           }}
           disabled={uploading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-slate-500 hover:border-blue-400 hover:bg-blue-50/30 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-muted-foreground hover:border-blue-400 hover:bg-blue-50/30 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? (
             <>

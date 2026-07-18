@@ -24,25 +24,31 @@ const STEPS = [
   },
 ] as const;
 
-export function HowAccessWorksSection({ primaryColor }: { primaryColor: string }) {
+export function HowAccessWorksSection({
+  primaryColor,
+}: {
+  primaryColor: string;
+}) {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50/80"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/50"
       >
-        <span className="font-semibold text-slate-900">¿Cómo funciona el acceso?</span>
+        <span className="font-semibold text-foreground">
+          ¿Cómo funciona el acceso?
+        </span>
         {open ? (
-          <ChevronDown className="size-5 text-slate-400" />
+          <ChevronDown className="size-5 text-muted-foreground" />
         ) : (
-          <ChevronRight className="size-5 text-slate-400" />
+          <ChevronRight className="size-5 text-muted-foreground" />
         )}
       </button>
       {open && (
-        <div className="border-t border-slate-100 px-5 py-4 animate-in slide-in-from-top-2 duration-200 space-y-6">
+        <div className="space-y-6 border-t border-border px-5 py-4">
           <div className="grid gap-4 sm:grid-cols-3">
             {STEPS.map((step, i) => {
               const Icon = step.icon;
@@ -50,8 +56,7 @@ export function HowAccessWorksSection({ primaryColor }: { primaryColor: string }
                 <div
                   key={i}
                   className={cn(
-                    "flex flex-col rounded-xl border p-4 transition-colors",
-                    "border-slate-100 bg-slate-50/50"
+                    "flex flex-col rounded-xl border border-border bg-muted/40 p-4"
                   )}
                 >
                   <div
@@ -61,32 +66,39 @@ export function HowAccessWorksSection({ primaryColor }: { primaryColor: string }
                       color: primaryColor,
                     }}
                   >
-                    <Icon className="size-5" strokeWidth={2} />
+                    <Icon className="size-5" strokeWidth={1.7} />
                   </div>
-                  <span className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <span className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Paso {i + 1}
                   </span>
-                  <h3 className="mb-1.5 text-sm font-semibold text-slate-900">
+                  <h3 className="mb-1.5 text-sm font-semibold text-foreground">
                     {step.title}
                   </h3>
-                  <p className="text-sm text-slate-500">{step.description}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {step.description}
+                  </p>
                 </div>
               );
             })}
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">Tipos de usuario</h3>
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              Tipos de usuario
+            </h3>
             <ul className="space-y-2">
               {TENANT_ROLE_DEFINITIONS.map((def) => (
                 <li
                   key={def.role}
-                  className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 text-sm"
+                  className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm"
                 >
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-foreground">
                     {ROL_LABELS[def.role] ?? def.label}
                   </span>
-                  <span className="text-slate-500"> — {def.summary}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — {def.summary}
+                  </span>
                 </li>
               ))}
             </ul>

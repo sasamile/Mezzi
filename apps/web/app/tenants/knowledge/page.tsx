@@ -1,5 +1,7 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import { useQuery, useMutation } from "convex/react";
 import { useRequireModule } from "@/lib/use-require-module";
 import { api } from "@/convex";
@@ -30,7 +32,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const DEFAULT_PRIMARY = "#197fe6";
 const DEFAULT_SECONDARY = "#06b6d4";
 
 const ACCEPTED_TYPES =
@@ -87,7 +88,7 @@ export default function KnowledgePage() {
   const removeItem = useMutation(api.knowledge.remove);
   const generateUploadUrl = useMutation(api.knowledge.generateUploadUrl);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
   const secondaryColor = tenant?.secondaryColor ?? DEFAULT_SECONDARY;
 
   const cssVars = useMemo(
@@ -246,7 +247,7 @@ export default function KnowledgePage() {
       style={{ ...cssVars, backgroundColor: "#F8FAFC" }}
     >
       <div className="w-full h-full ">
-      <div className="rounded-2xl border border-border/60 bg-white  shadow-lg h-screen overflow-y-auto">
+      <div className="rounded-2xl border border-border/60 bg-card  shadow-lg h-screen overflow-y-auto">
 
         {/* Contenedor padre: card blanca que envuelve todo el Centro de Conocimiento */}
           <div className="p-6 sm:p-8">
@@ -356,7 +357,7 @@ export default function KnowledgePage() {
         </Dialog>
 
         {/* ¿Cómo funciona? */}
-        <section className="mb-8 rounded-xl border border-border/60 bg-white p-4 sm:p-5 shadow-sm">
+        <section className="mb-8 rounded-xl border border-border/60 bg-card p-4 sm:p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-foreground mb-3">
             ¿Cómo funciona?
           </h3>
@@ -410,7 +411,7 @@ export default function KnowledgePage() {
           {/* Columna izquierda: Crear artículo + Subir archivo */}
           <div className="space-y-6">
             {/* Crear artículo */}
-            <section className="rounded-xl border border-border/60 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+            <section className="rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-center gap-2 mb-4">
                 <div
                   className="size-9 rounded-lg flex items-center justify-center"
@@ -504,7 +505,7 @@ export default function KnowledgePage() {
             </section>
 
             {/* Subir archivo */}
-            <section className="rounded-xl border border-border/60 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+            <section className="rounded-xl border border-border/60 bg-card p-5 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-center gap-2 mb-4">
                 <div
                   className="size-9 rounded-lg flex items-center justify-center"
@@ -580,7 +581,7 @@ export default function KnowledgePage() {
           </div>
 
           {/* Columna derecha: Conocimiento indexado */}
-          <section className="rounded-xl border border-border/60 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <div
                 className="size-9 rounded-lg flex items-center justify-center"

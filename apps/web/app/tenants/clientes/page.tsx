@@ -1,11 +1,13 @@
 "use client";
 
+import { resolvePrimaryColor } from "@/lib/tenant-theme";
+
 import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
-import { sileo } from "sileo";
+import { sileo } from "@/lib/toast";
 import { Search, UserPlus, Pencil, Trash2, Phone, Mail } from "lucide-react";
 import {
   AlertDialog,
@@ -28,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const DEFAULT_PRIMARY = "#197fe6";
 
 type CustomerDoc = {
   _id: Id<"customers">;
@@ -76,7 +77,7 @@ export default function ClientesPage() {
   const updateCustomer = useMutation(api.customers.update);
   const removeCustomer = useMutation(api.customers.remove);
 
-  const primaryColor = tenant?.primaryColor ?? DEFAULT_PRIMARY;
+  const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
 
   const filtered = React.useMemo(() => {
     const list = customers ?? [];
@@ -159,27 +160,27 @@ export default function ClientesPage() {
   if (!tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Cargando…</p>
+        <p className="text-muted-foreground">Cargando…</p>
       </div>
     );
   }
 
   return (
     <div
-      className="flex min-h-full flex-col overflow-y-auto bg-slate-50"
+      className="flex min-h-full flex-col overflow-y-auto bg-muted/40"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6 sm:p-8 md:p-10">
+      <div className="w-full flex-1 p-4 md:p-6 lg:p-8">
         <header className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Clientes
               </h1>
-              <p className="mt-2 text-base text-slate-500 sm:text-lg">
+              <p className="mt-2 text-base text-muted-foreground sm:text-lg">
                 Información de clientes para que la IA responda de forma personalizada por teléfono.
               </p>
-              <p className="mt-2 text-sm font-medium text-slate-600">
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
                 {filtered.length} cliente{filtered.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -198,7 +199,7 @@ export default function ClientesPage() {
         <div className="mb-6">
           <div className="relative max-w-sm">
             <Search
-              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-slate-400"
+              className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               strokeWidth={2}
             />
             <input
@@ -206,26 +207,26 @@ export default function ClientesPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por nombre, teléfono, email…"
-              className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
         </div>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Listado</h2>
+        <section className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="border-b border-border px-5 py-3">
+            <h2 className="text-sm font-semibold text-foreground">Listado</h2>
           </div>
           <div className="overflow-x-auto">
             {customers === undefined ? (
-              <div className="py-12 text-center text-sm text-slate-500">Cargando…</div>
+              <div className="py-12 text-center text-sm text-muted-foreground">Cargando…</div>
             ) : filtered.length === 0 ? (
-              <div className="py-12 text-center text-sm text-slate-500">
+              <div className="py-12 text-center text-sm text-muted-foreground">
                 {searchQuery.trim() ? "Ningún cliente coincide con la búsqueda." : "Aún no hay clientes. Se crearán al chatear por WhatsApp o puedes agregar uno manualmente."}
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-slate-600">
+                  <tr className="border-b border-border bg-muted/40/80 text-left text-muted-foreground">
                     <th className="px-4 py-4 font-medium align-middle">Nombre</th>
                     <th className="px-4 py-4 font-medium align-middle">Teléfono</th>
                     <th className="px-4 py-4 font-medium align-middle hidden sm:table-cell">Email</th>
@@ -235,31 +236,31 @@ export default function ClientesPage() {
                 </thead>
                 <tbody>
                   {filtered.map((c) => (
-                    <tr key={c._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-4 align-middle font-medium text-slate-900">{c.name}</td>
-                      <td className="px-4 py-4 align-middle text-slate-600">
+                    <tr key={c._id} className="border-b border-border hover:bg-muted/40/50 transition-colors">
+                      <td className="px-4 py-4 align-middle font-medium text-foreground">{c.name}</td>
+                      <td className="px-4 py-4 align-middle text-muted-foreground">
                         <span className="inline-flex items-center gap-2">
-                          <Phone className="size-4 shrink-0 text-slate-400" />
+                          <Phone className="size-4 shrink-0 text-muted-foreground" />
                           <span>{formatPhone(c.externalContactId)}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-4 align-middle text-slate-600 hidden sm:table-cell">
+                      <td className="px-4 py-4 align-middle text-muted-foreground hidden sm:table-cell">
                         {c.email ? (
                           <span className="inline-flex items-center gap-2">
-                            <Mail className="size-4 shrink-0 text-slate-400" />
+                            <Mail className="size-4 shrink-0 text-muted-foreground" />
                             <span>{c.email}</span>
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 align-middle text-slate-500 hidden md:table-cell">{formatDate(c.lastContactAt)}</td>
+                      <td className="px-4 py-4 align-middle text-muted-foreground hidden md:table-cell">{formatDate(c.lastContactAt)}</td>
                       <td className="px-4 py-4 align-middle text-right">
                         <div className="inline-flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={() => setEditingCustomer(c)}
-                            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                             title="Editar"
                           >
                             <Pencil className="size-4" />
@@ -267,7 +268,7 @@ export default function ClientesPage() {
                           <button
                             type="button"
                             onClick={() => setDeleteCustomer(c)}
-                            className="inline-flex size-9 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"
                             title="Eliminar"
                           >
                             <Trash2 className="size-4" />
@@ -304,11 +305,11 @@ export default function ClientesPage() {
             </div>
             <div>
               <Label htmlFor="create-notes">Notas</Label>
-              <textarea id="create-notes" name="notes" className="mt-1 min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="Información útil para el equipo" />
+              <textarea id="create-notes" name="notes" className="mt-1 min-h-[80px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="Información útil para el equipo" />
             </div>
             <div>
               <Label htmlFor="create-prefs">Preferencias</Label>
-              <textarea id="create-prefs" name="preferences" className="mt-1 min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="Ej. Sin gluten, mesa junto a la ventana" />
+              <textarea id="create-prefs" name="preferences" className="mt-1 min-h-[80px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="Ej. Sin gluten, mesa junto a la ventana" />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
@@ -330,7 +331,7 @@ export default function ClientesPage() {
                 <Label htmlFor="edit-name">Nombre *</Label>
                 <Input id="edit-name" name="name" defaultValue={editingCustomer.name} required className="mt-1" />
               </div>
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-muted-foreground">
                 Teléfono: {formatPhone(editingCustomer.externalContactId)} (no editable)
               </div>
               <div>
@@ -339,11 +340,11 @@ export default function ClientesPage() {
               </div>
               <div>
                 <Label htmlFor="edit-notes">Notas</Label>
-                <textarea id="edit-notes" name="notes" defaultValue={editingCustomer.notes ?? ""} className="mt-1 min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
+                <textarea id="edit-notes" name="notes" defaultValue={editingCustomer.notes ?? ""} className="mt-1 min-h-[80px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
               </div>
               <div>
                 <Label htmlFor="edit-prefs">Preferencias</Label>
-                <textarea id="edit-prefs" name="preferences" defaultValue={editingCustomer.preferences ?? ""} className="mt-1 min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
+                <textarea id="edit-prefs" name="preferences" defaultValue={editingCustomer.preferences ?? ""} className="mt-1 min-h-[80px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditingCustomer(null)}>Cancelar</Button>
