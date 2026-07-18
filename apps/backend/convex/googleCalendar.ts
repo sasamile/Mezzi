@@ -1,5 +1,6 @@
 import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { assertTenantOwner } from "./lib/tenantAccess";
 
 export const get = query({
   args: { tenantId: v.id("tenants") },
@@ -66,8 +67,12 @@ export const saveTokens = mutation({
 });
 
 export const disconnect = mutation({
-  args: { tenantId: v.id("tenants") },
+  args: {
+    actorUserId: v.id("users"),
+    tenantId: v.id("tenants"),
+  },
   handler: async (ctx, args) => {
+    await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
     const existing = await ctx.db
       .query("googleCalendarIntegrations")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))

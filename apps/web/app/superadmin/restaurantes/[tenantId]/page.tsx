@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { DEFAULT_RESTAURANTE_FORM, type RestauranteFormState } from "../../../../types/types";
@@ -21,6 +22,8 @@ import { RestauranteFormDialog } from "@/components/(admin)/restaurantes/Restaur
 
 
 export default function RestauranteDetailPage() {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const params = useParams<{ tenantId: string }>();
   const tenantId = params.tenantId as Id<"tenants">;
 
@@ -47,9 +50,10 @@ export default function RestauranteDetailPage() {
 
   const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !tenant) return;
+    if (!form.name.trim() || !tenant || !actorUserId) return;
     try {
       await updateTenant({
+        actorUserId,
         tenantId: tenant._id,
         name: form.name,
         status: form.status,

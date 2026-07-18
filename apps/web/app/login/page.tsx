@@ -24,11 +24,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import {
-  DashedGridBackground,
-  dashedGridFadeForHour,
-  type DashedGridFade,
-} from "@/components/login/dashed-grid-background";
+import { LoginAtmosphere } from "@/components/login/login-atmosphere";
+import { cn } from "@/lib/utils";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Ingresa un correo válido" }),
@@ -38,6 +35,9 @@ const loginSchema = z.object({
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
+
+const inputClass =
+  "h-11 border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 shadow-none focus-visible:border-zinc-400 focus-visible:ring-1 focus-visible:ring-zinc-400";
 
 function LoginContent() {
   const router = useRouter();
@@ -82,11 +82,6 @@ function LoginContent() {
   useEffect(() => {
     setLogoSrc(branding.logoSrc);
   }, [branding.logoSrc]);
-
-  const [gridFade, setGridFade] = useState<DashedGridFade>("top");
-  useEffect(() => {
-    setGridFade(dashedGridFadeForHour(new Date().getHours()));
-  }, []);
 
   const form = useForm<LoginValues>({
     defaultValues: {
@@ -167,67 +162,64 @@ function LoginContent() {
     }
   };
 
+  const accent = branding.accentColor ?? "#dc2626";
+  const useSideImage = branding.sidePanel === "image";
+
   if (isLoading || user) {
     return (
       <div className="relative flex min-h-screen items-center justify-center px-4">
-        <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
+        <LoginAtmosphere accentColor={accent} className="absolute inset-0 z-0" />
         <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
       </div>
     );
   }
 
-  const useGridBackground = branding.sidePanel === "dashed-grid";
-  const accent = branding.accentColor ?? "#dc2626";
-
   return (
-    <div
-      className={
-        useGridBackground
-          ? "relative flex min-h-screen w-full items-center justify-center px-4 py-10"
-          : "flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-10"
-      }
-    >
-      {useGridBackground && (
-        <DashedGridBackground fade={gridFade} className="absolute inset-0 z-0" />
-      )}
+    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-10">
+      <LoginAtmosphere accentColor={accent} className="absolute inset-0 z-0" />
+
       <div
-        className={
-          useGridBackground
-            ? "relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 shadow-md sm:p-8 [color-scheme:light]"
-            : "grid min-h-[80vh] w-full max-w-5xl grid-cols-1 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-md [color-scheme:light] md:grid-cols-2"
-        }
+        className={cn(
+          "relative z-10 w-full overflow-hidden rounded-2xl border border-white/10 bg-white shadow-[0_24px_80px_-24px_rgba(0,0,0,0.55)] [color-scheme:light]",
+          useSideImage
+            ? "grid max-w-4xl grid-cols-1 md:grid-cols-2"
+            : "max-w-[400px]"
+        )}
       >
-        <div className="flex items-center px-2 py-4 sm:px-6 sm:py-8">
-          <div className="w-full max-w-sm space-y-7">
-            <div className="space-y-3">
-              <div className="flex justify-center px-2">
+        <div className="flex items-center px-6 py-8 sm:px-8 sm:py-10">
+          <div className="w-full space-y-8">
+            <div className="space-y-4">
+              <div className="flex justify-center">
                 <Image
                   src={logoSrc}
                   alt={branding.logoAlt}
-                  width={260}
-                  height={43}
+                  width={220}
+                  height={40}
                   priority
                   unoptimized={logoSrc.startsWith("/")}
                   onError={() => {
                     const fallback = getLoginBranding(hostname, null).logoSrc;
                     if (fallback && fallback !== logoSrc) setLogoSrc(fallback);
                   }}
-                  className="h-auto w-full max-w-[200px] object-contain"
+                  className="h-9 w-auto max-w-[180px] object-contain sm:h-10 sm:max-w-[200px]"
                 />
               </div>
-              <p className="text-center text-sm text-zinc-500">
-                {branding.subtitle}
-              </p>
+              <div className="space-y-1 text-center">
+                <h1 className="text-[15px] font-medium tracking-tight text-zinc-900">
+                  Iniciar sesión
+                </h1>
+                <p className="text-[13px] text-zinc-500">{branding.subtitle}</p>
+              </div>
             </div>
 
             <Form {...form}>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-zinc-800">
+                      <FormLabel className="text-[13px] font-medium text-zinc-700">
                         Correo electrónico
                       </FormLabel>
                       <FormControl>
@@ -235,7 +227,7 @@ function LoginContent() {
                           type="email"
                           placeholder="tu@restaurante.com"
                           autoComplete="email"
-                          className="border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+                          className={inputClass}
                           {...field}
                         />
                       </FormControl>
@@ -249,14 +241,16 @@ function LoginContent() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-zinc-800">Contraseña</FormLabel>
+                      <FormLabel className="text-[13px] font-medium text-zinc-700">
+                        Contraseña
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
                             placeholder="••••••••"
                             autoComplete="current-password"
-                            className="border-zinc-200 bg-zinc-50 pr-10 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-zinc-400"
+                            className={cn(inputClass, "pr-10")}
                             {...field}
                           />
                           <button
@@ -282,14 +276,14 @@ function LoginContent() {
                   )}
                 />
 
-                <div className="pt-1">
+                <div className="pt-2">
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-lg text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                     style={{ backgroundColor: accent }}
                   >
-                    {isSubmitting ? "Entrando…" : "Iniciar sesión"}
+                    {isSubmitting ? "Entrando…" : "Continuar"}
                   </button>
                 </div>
               </form>
@@ -297,13 +291,13 @@ function LoginContent() {
           </div>
         </div>
 
-        {!useGridBackground && (
-          <div className="relative hidden h-full w-full overflow-hidden bg-[#fff5f5] md:block">
+        {useSideImage && (
+          <div className="relative hidden min-h-[420px] overflow-hidden bg-zinc-100 md:block">
             <Image
               src={branding.sideImageSrc}
               alt={branding.sideImageAlt}
               fill
-              className="rounded-2xl object-cover object-top"
+              className="object-cover object-top"
             />
           </div>
         )}
@@ -317,7 +311,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="relative flex min-h-screen items-center justify-center px-4">
-          <DashedGridBackground fade="top" className="absolute inset-0 z-0" />
+          <LoginAtmosphere className="absolute inset-0 z-0" />
           <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
         </div>
       }

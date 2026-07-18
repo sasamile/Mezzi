@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertTenantOwner } from "./lib/tenantAccess";
 
 export const getYCloud = query({
   args: { tenantId: v.id("tenants") },
@@ -18,6 +19,7 @@ export const getYCloud = query({
 
 export const saveYCloud = mutation({
   args: {
+    actorUserId: v.id("users"),
     tenantId: v.id("tenants"),
     apiKey: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
@@ -25,6 +27,7 @@ export const saveYCloud = mutation({
     connected: v.optional(v.boolean()), // solo para desconectar manualmente
   },
   handler: async (ctx, args) => {
+    await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
     const now = Date.now();
     const existing = await ctx.db
       .query("tenantIntegrations")

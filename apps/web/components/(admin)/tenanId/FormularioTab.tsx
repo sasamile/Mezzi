@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 import { Trash2, Plus, Check, Copy, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,8 @@ export function FormularioTab({
   tenantId: Id<"tenants">;
   tenantName: string;
 }) {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const formConfig = useQuery(api.tenantForm.getConfig, { tenantId });
   const currentShare = useQuery(api.tenantForm.getCurrentShare, { tenantId });
   const lastSubmission = useQuery(api.tenantForm.getLastSubmission, {
@@ -223,10 +226,11 @@ export function FormularioTab({
   );
 
   const handleApplyColors = async () => {
-    if (!hasSubmissionColors) return;
+    if (!hasSubmissionColors || !actorUserId) return;
     setApplyingColors(true);
     try {
       await updateTenant({
+        actorUserId,
         tenantId,
         ...(submissionPrimary && { primaryColor: submissionPrimary }),
         ...(submissionSecondary && { secondaryColor: submissionSecondary }),

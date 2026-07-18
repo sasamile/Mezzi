@@ -6,7 +6,9 @@ import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
+import { useRequireOwner } from "@/lib/use-require-owner";
 import { sileo } from "@/lib/toast";
 import { Search, UserPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,7 +42,9 @@ type Member = {
 };
 
 export default function UsersPage() {
+  const { user } = useAuth();
   const { tenantId } = useTenant();
+  const { isOwner, ready } = useRequireOwner();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<string>("all");
   const [sortBy, setSortBy] = React.useState<"name" | "activity">("activity");
@@ -55,11 +59,11 @@ export default function UsersPage() {
   );
   const members = useQuery(
     api.users.listByTenant,
-    tenantId ? { tenantId } : "skip"
+    tenantId && isOwner ? { tenantId } : "skip"
   );
   const folders = useQuery(
     api.conversationFolders.listByTenant,
-    tenantId ? { tenantId } : "skip"
+    tenantId && isOwner ? { tenantId } : "skip"
   );
 
   const createUser = useMutation(api.users.create);
@@ -72,6 +76,7 @@ export default function UsersPage() {
 
   const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
   const memberships = (members ?? []) as Member[];
+  const actorUserId = user?._id as Id<"users"> | undefined;
 
   const filteredAndSorted = React.useMemo(() => {
     let list = [...memberships];
@@ -122,19 +127,28 @@ export default function UsersPage() {
     allowedPages: string[];
     allowedFolders: string[] | undefined;
   }) => {
+    if (!actorUserId || !tenantId) return;
     try {
       await updateMemberProfile({
+        actorUserId,
+        tenantId,
         userId: data.userId,
         name: data.name,
         email: data.email,
         password: data.password,
       });
-      await updateRole({ userTenantId: data.userTenantId, role: data.role });
+      await updateRole({
+        actorUserId,
+        userTenantId: data.userTenantId,
+        role: data.role,
+      });
       await updatePermissions({
+        actorUserId,
         userTenantId: data.userTenantId,
         allowedPages: data.allowedPages,
       });
       await updateFolderPermissions({
+        actorUserId,
         userTenantId: data.userTenantId,
         allowedFolders: data.allowedFolders,
       });
@@ -154,14 +168,17 @@ export default function UsersPage() {
   };
 
   const handleCreateUser = async (data: CreateUserFormData) => {
-    if (!tenantId) return;
+    if (!tenantId || !actorUserId) return;
     try {
       const userId = await createUser({
+        actorUserId,
+        tenantId,
         name: data.name.trim(),
         email: data.email.trim(),
         password: data.password,
       });
       await inviteToTenant({
+        actorUserId,
         tenantId,
         userId,
         role: data.role,
@@ -182,9 +199,12 @@ export default function UsersPage() {
   };
 
   const handleRemoveAccess = async () => {
-    if (!removeMemberId) return;
+    if (!removeMemberId || !actorUserId) return;
     try {
-      await removeFromTenant({ userTenantId: removeMemberId });
+      await removeFromTenant({
+        actorUserId,
+        userTenantId: removeMemberId,
+      });
       sileo.success({
         title: "Acceso quitado",
         description: "El usuario ya no tiene acceso al restaurante.",
@@ -197,6 +217,14 @@ export default function UsersPage() {
       });
     }
   };
+
+  if (!ready || !isOwner) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-sm text-muted-foreground">Cargando…</p>
+      </div>
+    );
+  }
 
   if (!tenantId) {
     return (

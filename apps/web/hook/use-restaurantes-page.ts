@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
 import { useState, useMemo } from "react";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 import type { TenantStatus } from "../types/types";
 import { DEFAULT_RESTAURANTE_FORM, type RestauranteFormState } from "../types/types";
@@ -29,6 +30,8 @@ export type TenantWithPlan = {
 };
 
 export function useRestaurantesPage() {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const tenants = useQuery(api.tenants.listWithPlans) as TenantWithPlan[] | undefined;
   const plans = useQuery(api.plans.list);
   const createTenant = useMutation(api.tenants.create);
@@ -98,7 +101,9 @@ export function useRestaurantesPage() {
     if (!form.name.trim()) return;
     try {
       if (editingId) {
+        if (!actorUserId) return;
         await updateTenant({
+          actorUserId,
           tenantId: editingId,
           name: form.name,
           status: form.status,

@@ -1,5 +1,10 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  assertSuperadmin,
+  assertTenantOwner,
+  assertTenantOwnerByMembership,
+} from "./lib/tenantAccess";
 
 const roleValidator = v.union(
   v.literal("OWNER"),
@@ -37,11 +42,20 @@ export const get = query({
 /** Crear usuario para invitarlo como administrador de un restaurante */
 export const create = mutation({
   args: {
+    actorUserId: v.id("users"),
+    /** Si se indica, el actor debe ser OWNER de ese tenant. Si no, debe ser superadmin. */
+    tenantId: v.optional(v.id("tenants")),
     name: v.string(),
     email: v.string(),
     password: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.tenantId) {
+      await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
+    } else {
+      await assertSuperadmin(ctx, args.actorUserId);
+    }
+
     const existing = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))
@@ -104,6 +118,7 @@ export const listByTenant = query({
 
 export const inviteToTenant = mutation({
   args: {
+    actorUserId: v.id("users"),
     tenantId: v.id("tenants"),
     userId: v.id("users"),
     role: roleValidator,
@@ -111,6 +126,7 @@ export const inviteToTenant = mutation({
     allowedFolders: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
     const existing = await ctx.db
       .query("userTenants")
       .withIndex("by_user_tenant", (q) =>
@@ -136,10 +152,12 @@ export const inviteToTenant = mutation({
 /** Actualizar permisos (páginas visibles) de un usuario en el tenant */
 export const updatePermissions = mutation({
   args: {
+    actorUserId: v.id("users"),
     userTenantId: v.id("userTenants"),
     allowedPages: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertTenantOwnerByMembership(ctx, args.userTenantId, args.actorUserId);
     await ctx.db.patch(args.userTenantId, { allowedPages: args.allowedPages });
     return args.userTenantId;
   },
@@ -152,10 +170,12 @@ export const updatePermissions = mutation({
  */
 export const updateFolderPermissions = mutation({
   args: {
+    actorUserId: v.id("users"),
     userTenantId: v.id("userTenants"),
     allowedFolders: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await assertTenantOwnerByMembership(ctx, args.userTenantId, args.actorUserId);
     await ctx.db.patch(args.userTenantId, {
       allowedFolders: args.allowedFolders,
     });
@@ -181,10 +201,12 @@ export const getMembershipByTenantAndUser = query({
 
 export const updateRole = mutation({
   args: {
+    actorUserId: v.id("users"),
     userTenantId: v.id("userTenants"),
     role: roleValidator,
   },
   handler: async (ctx, args) => {
+    await assertTenantOwnerByMembership(ctx, args.userTenantId, args.actorUserId);
     await ctx.db.patch(args.userTenantId, { role: args.role });
     if (args.role === "HR") {
       await ctx.db.patch(args.userTenantId, {
@@ -201,12 +223,15 @@ export const updateRole = mutation({
  */
 export const updateMemberProfile = mutation({
   args: {
+    actorUserId: v.id("users"),
+    tenantId: v.id("tenants"),
     userId: v.id("users"),
     name: v.string(),
     email: v.string(),
     password: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Usuario no encontrado");
 
@@ -269,8 +294,12 @@ export const updateMemberProfile = mutation({
 });
 
 export const removeFromTenant = mutation({
-  args: { userTenantId: v.id("userTenants") },
+  args: {
+    actorUserId: v.id("users"),
+    userTenantId: v.id("userTenants"),
+  },
   handler: async (ctx, args) => {
+    await assertTenantOwnerByMembership(ctx, args.userTenantId, args.actorUserId);
     await ctx.db.delete(args.userTenantId);
     return args.userTenantId;
   },

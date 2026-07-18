@@ -4,7 +4,9 @@ import * as React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
+import { useRequireOwner } from "@/lib/use-require-owner";
 import {
   resolvePrimaryColor,
   DEFAULT_PRIMARY,
@@ -38,7 +40,9 @@ const ACCEPTED_IMAGE_TYPES = [
 type Tab = "general" | "correos";
 
 export default function AjustesPage() {
+  const { user } = useAuth();
   const { tenantId } = useTenant();
+  const { isOwner, ready } = useRequireOwner();
   const [tab, setTab] = React.useState<Tab>("general");
   const [form, setForm] = React.useState({
     name: "",
@@ -51,7 +55,10 @@ export default function AjustesPage() {
     pqrNotificationEmails: "",
   });
 
-  const tenant = useQuery(api.tenants.get, tenantId ? { tenantId } : "skip");
+  const tenant = useQuery(
+    api.tenants.get,
+    tenantId && isOwner ? { tenantId } : "skip"
+  );
   const uploadPreviewUrl = useQuery(
     api.tenants.getStorageUrl,
     form.logoStorageId ? { storageId: form.logoStorageId } : "skip"
@@ -59,6 +66,7 @@ export default function AjustesPage() {
   const updateTenant = useMutation(api.tenants.update);
   const generateUploadUrl = useMutation(api.tenants.generateLogoUploadUrl);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const actorUserId = user?._id as Id<"users"> | undefined;
 
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -96,8 +104,12 @@ export default function AjustesPage() {
     : "";
 
   const handleSaveRouting = async (routing: PqrRoutingRule[]) => {
-    if (!tenantId) return;
-    await updateTenant({ tenantId, pqrEmailRouting: routing });
+    if (!tenantId || !actorUserId) return;
+    await updateTenant({
+      actorUserId,
+      tenantId,
+      pqrEmailRouting: routing,
+    });
   };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +147,7 @@ export default function AjustesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId) return;
+    if (!tenantId || !actorUserId) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -144,6 +156,7 @@ export default function AjustesPage() {
         .map((s) => s.trim())
         .filter(Boolean);
       await updateTenant({
+        actorUserId,
         tenantId,
         name: form.name.trim() || undefined,
         ...(form.logoStorageId
@@ -175,7 +188,7 @@ export default function AjustesPage() {
     }
   };
 
-  if (!tenantId) {
+  if (!ready || !isOwner || !tenantId) {
     return (
       <PageSurface>
         <SettingsPageSkeleton />

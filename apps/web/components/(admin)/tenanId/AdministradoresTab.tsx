@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 import { UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,8 @@ export function AdministradoresTab({
 }: {
   tenantId: Id<"tenants">;
 }) {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const members = useQuery(api.users.listByTenant, { tenantId });
   const allUsers = useQuery(api.users.list);
   const inviteToTenant = useMutation(api.users.inviteToTenant);
@@ -57,9 +60,10 @@ export function AdministradoresTab({
     allUsers?.filter((u) => !existingUserIds.has(u._id)) ?? [];
 
   const handleInvite = async () => {
-    if (!inviteUserId) return;
+    if (!inviteUserId || !actorUserId) return;
     try {
       await inviteToTenant({
+        actorUserId,
         tenantId,
         userId: inviteUserId,
         role: inviteRole as "OWNER" | "ADMIN",
@@ -86,13 +90,16 @@ export function AdministradoresTab({
       });
       return;
     }
+    if (!actorUserId) return;
     try {
       const userId = await createUser({
+        actorUserId,
         name: createForm.name,
         email: createForm.email,
         password: createForm.password || undefined,
       });
       await inviteToTenant({
+        actorUserId,
         tenantId,
         userId,
         role: createForm.role,
@@ -112,9 +119,12 @@ export function AdministradoresTab({
   };
 
   const handleRemoveMember = async () => {
-    if (!removeMemberId) return;
+    if (!removeMemberId || !actorUserId) return;
     try {
-      await removeFromTenant({ userTenantId: removeMemberId });
+      await removeFromTenant({
+        actorUserId,
+        userTenantId: removeMemberId,
+      });
       setRemoveMemberId(null);
       sileo.success({
         title: "Usuario quitado",
@@ -213,6 +223,7 @@ export function AdministradoresTab({
                           onChange={async (e) => {
                             try {
                               await updateRole({
+                                actorUserId: actorUserId!,
                                 userTenantId: m._id,
                                 role: e.target
                                   .value as "OWNER" | "ADMIN" | "AGENT" | "VIEWER",
@@ -286,6 +297,7 @@ export function AdministradoresTab({
                     onChange={async (e) => {
                       try {
                         await updateRole({
+                          actorUserId: actorUserId!,
                           userTenantId: m._id,
                           role: e.target
                             .value as "OWNER" | "ADMIN" | "AGENT" | "VIEWER",

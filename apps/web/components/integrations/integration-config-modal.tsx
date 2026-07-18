@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import type { IntegrationDefinition } from "@/lib/integrations-catalog";
 import {
   Dialog,
@@ -64,6 +65,8 @@ export function IntegrationConfigModal({
   primaryColor,
   onSuccess,
 }: IntegrationConfigModalProps) {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const [step, setStep] = useState<"form" | "loading" | "success">("form");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
@@ -106,12 +109,13 @@ export function IntegrationConfigModal({
   };
 
   const handleConnect = async () => {
-    if (!tenantId || integration?.id !== "ycloud") return;
+    if (!tenantId || !actorUserId || integration?.id !== "ycloud") return;
 
     setStep("loading");
 
     try {
       await saveYCloud({
+        actorUserId,
         tenantId,
         apiKey: apiKeyInput.trim() || undefined,
         phoneNumber: phoneInput.trim() || undefined,
@@ -173,7 +177,8 @@ export function IntegrationConfigModal({
               <button
                 type="button"
                 onClick={async () => {
-                  await disconnectGoogle({ tenantId });
+                  if (!actorUserId) return;
+                  await disconnectGoogle({ actorUserId, tenantId });
                   onSuccess?.();
                   onOpenChange(false);
                 }}

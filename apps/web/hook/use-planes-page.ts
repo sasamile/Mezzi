@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 
 export type PlanFormState = {
@@ -19,6 +20,8 @@ export const DEFAULT_PLAN_FORM: PlanFormState = {
 };
 
 export function usePlanesPage() {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const plans = useQuery(api.plans.list);
   const tenants = useQuery(api.tenants.listWithPlans);
   const stats = useQuery(api.superadmin.getStats);
@@ -88,8 +91,9 @@ export function usePlanesPage() {
   };
 
   const handleTenantPlanChange = async (tenantId: Id<"tenants">, planId: Id<"plans"> | undefined) => {
+    if (!actorUserId) return;
     try {
-      await updateTenant({ tenantId, planId });
+      await updateTenant({ actorUserId, tenantId, planId });
       sileo.success({ title: "Plan actualizado", description: "El plan del restaurante fue actualizado." });
     } catch (err) {
       sileo.error({ title: "Error", description: err instanceof Error ? err.message : "Error al actualizar." });

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex";
 import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { sileo } from "@/lib/toast";
 import { TENANT_MODULES } from "@/constants";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
@@ -29,6 +30,8 @@ export function ModulosTab({
   tenantName?: string;
   customDomain?: string | null;
 }) {
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
   const tenantIdentity = { name: tenantName, customDomain };
   const defaultPdfs = isPdfsModuleEnabled(enabledModules, tenantIdentity);
   const updateTenant = useMutation(api.tenants.update);
@@ -58,9 +61,10 @@ export function ModulosTab({
   };
 
   const handleSave = async () => {
+    if (!actorUserId) return;
     setSaving(true);
     try {
-      await updateTenant({ tenantId, enabledModules: modules });
+      await updateTenant({ actorUserId, tenantId, enabledModules: modules });
       sileo.success({
         title: "Módulos actualizados",
         description: "Los módulos se guardaron correctamente.",

@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ALCARBON_DOMAIN } from "./system/alcarbon";
+import { assertTenantOwner } from "./lib/tenantAccess";
 
 function normalizeHost(value?: string): string | null {
   if (!value) return null;
@@ -100,6 +101,7 @@ const enabledModulesValidator = v.optional(
 
 export const update = mutation({
   args: {
+    actorUserId: v.id("users"),
     tenantId: v.id("tenants"),
     name: v.optional(v.string()),
     status: v.optional(
@@ -131,7 +133,8 @@ export const update = mutation({
     enabledModules: enabledModulesValidator,
   },
   handler: async (ctx, args) => {
-    const { tenantId, logoStorageId, ...rest } = args;
+    await assertTenantOwner(ctx, args.tenantId, args.actorUserId);
+    const { tenantId, logoStorageId, actorUserId: _actor, ...rest } = args;
     const updates: Record<string, unknown> = { ...rest };
     if (logoStorageId) {
       const url = await ctx.storage.getUrl(logoStorageId);

@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
+import { useRequireOwner } from "@/lib/use-require-owner";
 import {
   INTEGRATIONS_CATALOG,
   INTEGRATION_CATEGORIES,
@@ -45,6 +46,7 @@ function getIntegrationStatus(
 
 export default function IntegracionesPage() {
   const { tenantId } = useTenant();
+  const { isOwner, ready } = useRequireOwner();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIntegration, setSelectedIntegration] =
     useState<IntegrationDefinition | null>(null);
@@ -52,15 +54,15 @@ export default function IntegracionesPage() {
 
   const tenant = useQuery(
     api.tenants.get,
-    tenantId ? { tenantId } : "skip"
+    tenantId && isOwner ? { tenantId } : "skip"
   );
   const ycloud = useQuery(
     api.integrations.getYCloud,
-    tenantId ? { tenantId } : "skip"
+    tenantId && isOwner ? { tenantId } : "skip"
   );
   const googleCalendar = useQuery(
     api.googleCalendar.get,
-    tenantId ? { tenantId } : "skip"
+    tenantId && isOwner ? { tenantId } : "skip"
   );
 
   const primaryColor = resolvePrimaryColor(tenant?.primaryColor);
@@ -96,7 +98,7 @@ export default function IntegracionesPage() {
     setModalOpen(true);
   };
 
-  if (!tenantId) {
+  if (!ready || !isOwner || !tenantId) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-muted-foreground">Cargando...</p>

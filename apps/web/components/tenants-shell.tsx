@@ -154,6 +154,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
     return modules?.[key] !== false;
   };
 
+  const isOwner = membership?.role === "OWNER";
   const allowedPages = membership?.allowedPages;
   const hasPageAccess = (pageKey: string) => {
     if (!allowedPages || allowedPages.length === 0) return true;
@@ -260,6 +261,13 @@ export function TenantsShell({ children }: TenantsShellProps) {
     if (!tenantId && e.group !== "General") return false;
     if (e.module && !hasModule(e.module)) return false;
     if (!hasPageAccess(e.pageKey)) return false;
+    // Solo el propietario ve Usuarios e Integraciones
+    if (
+      (e.pageKey === "users" || e.pageKey === "integraciones") &&
+      !isOwner
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -432,13 +440,17 @@ export function TenantsShell({ children }: TenantsShellProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          type="button"
           className={cn(
-            "flex w-full items-center gap-3 px-3 py-3 transition-colors hover:bg-muted",
-            compact && "justify-center"
+            "flex items-center transition-colors hover:bg-muted",
+            compact
+              ? "size-9 shrink-0 justify-center rounded-xl"
+              : "w-full gap-3 px-3 py-3"
           )}
+          aria-label="Menú de cuenta"
         >
           <div
-            className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-bold text-white"
+            className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full text-xs font-semibold text-white"
             style={{
               background: isLoading
                 ? "var(--muted)"
@@ -473,17 +485,21 @@ export function TenantsShell({ children }: TenantsShellProps) {
             {user?.email ?? ""}
           </p>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link
-            href={tenantId ? `${baseHref}/ajustes` : baseHref}
-            className="cursor-pointer"
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <Settings size={16} strokeWidth={1.5} className="mr-2" />
-            Ajustes
-          </Link>
-        </DropdownMenuItem>
+        {isOwner && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link
+                href={tenantId ? `${baseHref}/ajustes` : baseHref}
+                className="cursor-pointer"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <Settings size={16} strokeWidth={1.5} className="mr-2" />
+                Ajustes
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="cursor-pointer text-destructive focus:text-destructive"
@@ -551,7 +567,13 @@ export function TenantsShell({ children }: TenantsShellProps) {
         >
           <ThemeToggle collapsed={opts.iconOnly} />
         </div>
-        {userMenu(opts.iconOnly)}
+        <div
+          className={cn(
+            opts.iconOnly ? "flex justify-center py-1.5" : undefined
+          )}
+        >
+          {userMenu(opts.iconOnly)}
+        </div>
         {opts.showCollapseToggle && (
           <button
             type="button"
@@ -629,12 +651,12 @@ export function TenantsShell({ children }: TenantsShellProps) {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden lg:my-3 lg:mr-3">
-        {/* Barra móvil: abre el menú */}
-        <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2 lg:hidden">
+        {/* Barra móvil: menú · marca · cuenta */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-3 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="grid size-9 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Abrir menú"
           >
             <Menu size={20} strokeWidth={1.7} />
@@ -644,19 +666,14 @@ export function TenantsShell({ children }: TenantsShellProps) {
             className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden"
           >
             <span
-              className="grid size-8 shrink-0 place-items-center rounded-[10px] shadow-sm"
+              className="grid size-8 shrink-0 place-items-center rounded-lg"
               style={{ backgroundColor: primaryColor }}
               aria-hidden
             >
-              <Flame size={16} strokeWidth={2} className="text-white" />
+              <Flame size={15} strokeWidth={2} className="text-white" />
             </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block truncate text-sm font-medium text-foreground">
-                {brandName}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {brandSubtitle}
-              </span>
+            <span className="min-w-0 truncate text-sm font-medium tracking-tight text-foreground">
+              {isLoading ? "…" : brandName}
             </span>
           </Link>
           {userMenu(true)}
