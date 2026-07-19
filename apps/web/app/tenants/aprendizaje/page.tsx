@@ -802,25 +802,6 @@ export default function AprendizajePage() {
                   <MessageSquarePlus className="h-3.5 w-3.5" />
                   Nueva
                 </button>
-                <span
-                  className="grid size-8 shrink-0 place-items-center rounded-full border border-border text-xs font-semibold text-muted-foreground"
-                  title="Pregunta a la IA sobre la empresa. Usa tu base de conocimiento para responder procedimientos, turnos y más."
-                  aria-label="¿Cómo funciona Aprendizaje?"
-                >
-                  ?
-                </span>
-              </div>
-              <div className="hidden items-center gap-2 border-b border-border px-4 py-3 md:flex">
-                <h1 className="text-sm font-semibold tracking-tight text-foreground">
-                  Aprendizaje
-                </h1>
-                <span
-                  className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground"
-                  title="Pregunta a la IA sobre la empresa. Usa tu base de conocimiento para responder procedimientos, turnos y más."
-                  aria-label="¿Cómo funciona Aprendizaje?"
-                >
-                  ?
-                </span>
               </div>
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                 {messages.length === 0 && !loading && (

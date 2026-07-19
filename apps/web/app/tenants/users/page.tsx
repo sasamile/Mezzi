@@ -245,18 +245,9 @@ export default function UsersPage() {
         <header>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
-                  Usuarios & Permisos
-                </h1>
-                <span
-                  className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-semibold text-muted-foreground"
-                  title="Invita personas, asígnales un rol y controla qué páginas pueden ver en este restaurante."
-                  aria-label="¿Cómo funciona? Invita personas, asígnales un rol y controla qué páginas pueden ver en este restaurante."
-                >
-                  ?
-                </span>
-              </div>
+              <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
+                Usuarios & Permisos
+              </h1>
               <p className="mt-1.5 text-sm text-muted-foreground sm:mt-2 sm:text-base lg:text-lg">
                 Gestiona quién puede acceder y qué puede hacer dentro de este restaurante.
               </p>
