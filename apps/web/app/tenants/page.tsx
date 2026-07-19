@@ -322,7 +322,7 @@ export default function TenantsPage() {
                 <p className="text-xs font-medium text-muted-foreground">
                   Escaladas
                 </p>
-                <p className="mt-0.5 text-xl font-semibold tabular-nums text-[var(--primaryColor)]">
+                <p className="mt-0.5 text-xl font-semibold tabular-nums text-(--primaryColor)">
                   {stats?.humanConversations ?? 0}
                 </p>
               </div>
@@ -366,7 +366,7 @@ export default function TenantsPage() {
             action={
               <Link
                 href="/tenants/inbox"
-                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primaryColor)] hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-(--primaryColor) hover:underline"
               >
                 Ver todo
                 <ArrowRight className="size-3" />
