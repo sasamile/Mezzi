@@ -37,7 +37,7 @@ const loginSchema = z.object({
 type LoginValues = z.infer<typeof loginSchema>;
 
 const inputClass =
-  "h-11 border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 shadow-none focus-visible:border-zinc-400 focus-visible:ring-1 focus-visible:ring-zinc-400";
+  "h-11 border-border bg-background text-foreground placeholder:text-muted-foreground shadow-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring";
 
 function LoginContent() {
   const router = useRouter();
@@ -169,7 +169,7 @@ function LoginContent() {
     return (
       <div className="relative flex min-h-screen items-center justify-center px-4">
         <LoginAtmosphere accentColor={accent} className="absolute inset-0 z-0" />
-        <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
+        <p className="relative z-10 text-sm text-muted-foreground">Cargando…</p>
       </div>
     );
   }
@@ -180,7 +180,7 @@ function LoginContent() {
 
       <div
         className={cn(
-          "relative z-10 w-full overflow-hidden rounded-2xl border border-white/10 bg-white shadow-[0_24px_80px_-24px_rgba(0,0,0,0.55)] [color-scheme:light]",
+          "relative z-10 w-full overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm",
           useSideImage
             ? "grid max-w-4xl grid-cols-1 md:grid-cols-2"
             : "max-w-[400px]"
@@ -205,10 +205,12 @@ function LoginContent() {
                 />
               </div>
               <div className="space-y-1 text-center">
-                <h1 className="text-[15px] font-medium tracking-tight text-zinc-900">
+                <h1 className="text-[15px] font-medium tracking-tight text-foreground">
                   Iniciar sesión
                 </h1>
-                <p className="text-[13px] text-zinc-500">{branding.subtitle}</p>
+                <p className="text-[13px] text-muted-foreground">
+                  {branding.subtitle}
+                </p>
               </div>
             </div>
 
@@ -219,7 +221,7 @@ function LoginContent() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-[13px] font-medium text-zinc-700">
+                      <FormLabel className="text-[13px] font-medium text-foreground">
                         Correo electrónico
                       </FormLabel>
                       <FormControl>
@@ -241,7 +243,7 @@ function LoginContent() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-[13px] font-medium text-zinc-700">
+                      <FormLabel className="text-[13px] font-medium text-foreground">
                         Contraseña
                       </FormLabel>
                       <FormControl>
@@ -256,7 +258,7 @@ function LoginContent() {
                           <button
                             type="button"
                             onClick={() => setShowPassword((prev) => !prev)}
-                            className="absolute inset-y-0 right-3 flex items-center justify-center text-zinc-400 transition-colors hover:text-zinc-700"
+                            className="absolute inset-y-0 right-3 flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                             aria-label={
                               showPassword
                                 ? "Ocultar contraseña"
@@ -292,7 +294,7 @@ function LoginContent() {
         </div>
 
         {useSideImage && (
-          <div className="relative hidden min-h-[420px] overflow-hidden bg-zinc-100 md:block">
+          <div className="relative hidden min-h-[420px] overflow-hidden bg-muted md:block">
             <Image
               src={branding.sideImageSrc}
               alt={branding.sideImageAlt}
@@ -312,7 +314,7 @@ export default function LoginPage() {
       fallback={
         <div className="relative flex min-h-screen items-center justify-center px-4">
           <LoginAtmosphere className="absolute inset-0 z-0" />
-          <p className="relative z-10 text-sm text-zinc-400">Cargando…</p>
+          <p className="relative z-10 text-sm text-muted-foreground">Cargando…</p>
         </div>
       }
     >

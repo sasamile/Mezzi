@@ -9,11 +9,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { sileo } from "@/lib/toast";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, X } from "lucide-react";
 import {
   FOLDER_COLOR_PALETTE,
   DEFAULT_FOLDER_COLOR,
@@ -145,7 +146,7 @@ function FolderRow({
           type="button"
           onClick={() => setConfirmDelete((v) => !v)}
           title="Eliminar"
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-red-600 transition-colors hover:bg-red-50"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950/40"
         >
           <Trash2 size={14} />
         </button>
@@ -165,13 +166,13 @@ function FolderRow({
         </div>
       </div>
       {confirmDelete && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-2 flex flex-col gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300 sm:flex-row sm:items-center sm:justify-between">
           <span>¿Eliminar “{folder.name}”? Se quitará de sus chats.</span>
-          <div className="flex gap-1.5">
+          <div className="flex shrink-0 gap-1.5">
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="rounded px-2 py-1 font-medium hover:bg-red-100"
+              className="rounded px-2 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40"
             >
               Cancelar
             </button>
@@ -221,16 +222,38 @@ export function FolderManagerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-full flex-col overflow-hidden sm:max-w-lg">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>Carpetas del inbox</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Organiza los chats por carpetas y define palabras clave para
-            clasificarlos automáticamente.
-          </p>
+      <DialogContent
+        showClose={false}
+        className={cn(
+          // Móvil: hoja anclada abajo (siempre visible título + cerrar)
+          "inset-x-0 bottom-0 top-auto flex h-[min(92dvh,920px)] max-h-[92dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-t-2xl rounded-b-none border-x-0 border-b-0 p-0",
+          // Desktop: modal centrado
+          "sm:inset-auto sm:bottom-auto sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl sm:border"
+        )}
+      >
+        <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-3 text-left sm:px-5 sm:py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 pr-2">
+              <DialogTitle className="text-base sm:text-lg">
+                Carpetas del inbox
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-left text-xs sm:text-sm">
+                Organiza los chats por carpetas y define palabras clave para
+                clasificarlos automáticamente.
+              </DialogDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="grid size-10 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Cerrar"
+            >
+              <X className="size-5" strokeWidth={1.7} />
+            </button>
+          </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto py-2">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-4 py-3 [-webkit-overflow-scrolling:touch] sm:px-5">
           {folders.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-6 text-center">
               <p className="text-sm text-muted-foreground">
@@ -252,7 +275,7 @@ export function FolderManagerModal({
           )}
         </div>
 
-        <div className="shrink-0 space-y-2 border-t border-border pt-3">
+        <div className="shrink-0 space-y-2 border-t border-border bg-card px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
           <p className="text-xs font-medium text-muted-foreground">
             Nueva carpeta
           </p>
@@ -276,6 +299,14 @@ export function FolderManagerModal({
             </Button>
           </div>
           <ColorSwatches value={newColor} onChange={setNewColor} />
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-1 w-full sm:hidden"
+            onClick={() => onOpenChange(false)}
+          >
+            Cerrar
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -190,6 +190,7 @@ export default function AprendizajePage() {
   const voiceActiveRef = useRef(false);
   const transcriptAccumulatorRef = useRef("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -496,6 +497,7 @@ export default function AprendizajePage() {
         sources: item.sources,
       },
     ]);
+    setHistoryOpen(false);
   };
 
   const deleteHistoryItem = (e: React.MouseEvent, itemId: string) => {
@@ -674,15 +676,31 @@ export default function AprendizajePage() {
         </div>
       ) : (
         <>
-          <div className="flex-1 flex min-h-0">
+          <div className="relative flex min-h-0 flex-1">
+            {historyOpen && (
+              <button
+                type="button"
+                className="absolute inset-0 z-30 bg-black/40 md:hidden"
+                aria-label="Cerrar historial"
+                onClick={() => setHistoryOpen(false)}
+              />
+            )}
             {/* Columna izquierda: historial */}
-            <aside className="w-64 shrink-0 border-r border-border bg-card/80 flex flex-col overflow-hidden">
+            <aside
+              className={cn(
+                "z-40 flex w-[min(280px,85vw)] shrink-0 flex-col overflow-hidden border-r border-border bg-card/80 transition-transform duration-200 md:relative md:z-auto md:w-64 md:translate-x-0",
+                historyOpen
+                  ? "absolute inset-y-0 left-0 translate-x-0 shadow-md"
+                  : "absolute inset-y-0 left-0 -translate-x-full md:flex"
+              )}
+            >
               <div className="p-3 border-b border-border space-y-2">
                 <button
                   type="button"
                   onClick={() => {
                     setMessages([]);
                     setLastExchange(null);
+                    setHistoryOpen(false);
                   }}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
                   style={{
@@ -759,8 +777,52 @@ export default function AprendizajePage() {
             </aside>
 
             {/* Columna derecha: chat */}
-            <main className="flex-1 flex flex-col min-w-0 bg-card rounded-l-xl shadow-sm">
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <main className="flex min-w-0 flex-1 flex-col bg-card md:rounded-l-xl md:shadow-sm">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Historial
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessages([]);
+                    setLastExchange(null);
+                  }}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium"
+                  style={{
+                    backgroundColor: "var(--primarySoft)",
+                    color: "var(--primaryColor)",
+                  }}
+                >
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  Nueva
+                </button>
+                <span
+                  className="grid size-8 shrink-0 place-items-center rounded-full border border-border text-xs font-semibold text-muted-foreground"
+                  title="Pregunta a la IA sobre la empresa. Usa tu base de conocimiento para responder procedimientos, turnos y más."
+                  aria-label="¿Cómo funciona Aprendizaje?"
+                >
+                  ?
+                </span>
+              </div>
+              <div className="hidden items-center gap-2 border-b border-border px-4 py-3 md:flex">
+                <h1 className="text-sm font-semibold tracking-tight text-foreground">
+                  Aprendizaje
+                </h1>
+                <span
+                  className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground"
+                  title="Pregunta a la IA sobre la empresa. Usa tu base de conocimiento para responder procedimientos, turnos y más."
+                  aria-label="¿Cómo funciona Aprendizaje?"
+                >
+                  ?
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                 {messages.length === 0 && !loading && (
                   <div className="flex flex-col items-center justify-center min-h-[280px] text-center">
                     <div
@@ -779,7 +841,7 @@ export default function AprendizajePage() {
                       Escribe o elige una sugerencia. La IA responde con tu base
                       de conocimiento.
                     </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <div className="flex max-w-full flex-wrap justify-center gap-2 px-1">
                       {SUGGESTIONS.map((s) => (
                         <button
                           key={s}
@@ -788,7 +850,7 @@ export default function AprendizajePage() {
                           disabled={
                             loading || (usage?.count ?? 0) >= DAILY_LIMIT
                           }
-                          className="px-4 py-2 rounded-full text-sm border border-border bg-card hover:bg-muted/40 hover:border-(--primaryColor) transition-colors"
+                          className="max-w-full rounded-full border border-border bg-card px-3 py-2 text-left text-xs leading-snug transition-colors hover:border-(--primaryColor) hover:bg-muted/40 sm:px-4 sm:text-sm"
                           style={{ color: "var(--primaryColor)" }}
                         >
                           {s}
@@ -917,7 +979,7 @@ export default function AprendizajePage() {
               </div>
 
               {/* Input avanzado */}
-              <footer className="shrink-0 border-t border-border p-4 bg-muted/40/50">
+              <footer className="shrink-0 border-t border-border bg-muted/40 p-3 sm:p-4">
                 {submitError && (
                   <p className="text-sm text-red-600 mb-2 px-1">
                     {submitError}

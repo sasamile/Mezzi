@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex";
-import { MoreHorizontal, UserMinus, Mail, Shield } from "lucide-react";
+import { MoreHorizontal, UserMinus, Mail, Shield, Pencil } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Owner",
@@ -67,14 +67,14 @@ export function UserCardRow({
   return (
     <div
       className={cn(
-        "group flex items-center gap-4 rounded-xl border border-border bg-background px-5 py-4 transition-colors duration-150",
+        "group flex flex-col gap-3 rounded-xl border border-border bg-background px-4 py-4 transition-colors duration-150 sm:flex-row sm:items-center sm:gap-4 sm:px-5",
         "hover:bg-muted/50"
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
         <div className="relative shrink-0">
           <div
-            className="flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white"
+            className="flex size-10 items-center justify-center rounded-full text-sm font-semibold text-white sm:size-11"
             style={{
               background: `linear-gradient(135deg, ${primaryColor} 0%, color-mix(in srgb, ${primaryColor} 80%, white) 100%)`,
             }}
@@ -118,10 +118,24 @@ export function UserCardRow({
           <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {member.user?.email ?? "—"}
           </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 sm:hidden">
+            {member.role !== "OWNER" && (
+              <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {ROLE_LABELS[member.role] ?? member.role}
+              </span>
+            )}
+            <span className="text-[11px] text-muted-foreground">
+              {status === "active"
+                ? formatRelativeTime(member.createdAt)
+                : status === "pending"
+                  ? "Invitación enviada"
+                  : "—"}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="shrink-0">
+      <div className="hidden shrink-0 sm:block">
         <span
           className={cn(
             "inline-flex rounded-md px-2.5 py-1 text-xs font-medium",
@@ -134,7 +148,7 @@ export function UserCardRow({
         </span>
       </div>
 
-      <div className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground sm:block">
+      <div className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground md:block">
         {status === "active"
           ? formatRelativeTime(member.createdAt)
           : status === "pending"
@@ -142,19 +156,20 @@ export function UserCardRow({
             : "—"}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border pt-3 sm:border-0 sm:pt-0">
         <button
           type="button"
           onClick={() => onChangeRole(member)}
-          className="h-8 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:h-8 sm:flex-none"
         >
+          <Pencil className="size-3.5 sm:hidden" />
           Editar
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:size-8"
               aria-label="Más opciones"
             >
               <MoreHorizontal className="size-4" />

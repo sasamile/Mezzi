@@ -78,6 +78,7 @@ export default function UsersPage() {
   const memberships = (members ?? []) as Member[];
   const actorUserId = user?._id as Id<"users"> | undefined;
 
+
   const filteredAndSorted = React.useMemo(() => {
     let list = [...memberships];
     if (searchQuery.trim()) {
@@ -239,15 +240,24 @@ export default function UsersPage() {
       className="flex min-h-full flex-col overflow-y-auto bg-muted/40"
       style={{ "--primaryColor": primaryColor } as React.CSSProperties}
     >
-      <div className="w-full flex-1 p-4 md:p-6 lg:p-8">
+      <div className="w-full min-w-0 flex-1 space-y-6 overflow-x-hidden p-4 md:p-6 lg:p-8">
         {/* Header */}
-        <header className="mb-8">
+        <header>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Usuarios & Permisos
-              </h1>
-              <p className="mt-2 text-base text-muted-foreground sm:text-lg">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
+                  Usuarios & Permisos
+                </h1>
+                <span
+                  className="grid size-6 shrink-0 place-items-center rounded-full border border-border text-xs font-semibold text-muted-foreground"
+                  title="Invita personas, asígnales un rol y controla qué páginas pueden ver en este restaurante."
+                  aria-label="¿Cómo funciona? Invita personas, asígnales un rol y controla qué páginas pueden ver en este restaurante."
+                >
+                  ?
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-muted-foreground sm:mt-2 sm:text-base lg:text-lg">
                 Gestiona quién puede acceder y qué puede hacer dentro de este restaurante.
               </p>
               <p className="mt-2 text-sm font-medium text-muted-foreground">
@@ -258,7 +268,7 @@ export default function UsersPage() {
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98]"
+              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg active:scale-[0.98] sm:w-auto"
               style={{ backgroundColor: primaryColor }}
             >
               <UserPlus className="size-5" strokeWidth={2} />
@@ -268,8 +278,8 @@ export default function UsersPage() {
         </header>
 
         {/* Search + filters */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-sm">
+        <div className="flex flex-col gap-3">
+          <div className="relative w-full max-w-sm">
             <Search
               className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               strokeWidth={2}
@@ -282,11 +292,11 @@ export default function UsersPage() {
               className="w-full rounded-xl border border-border bg-card py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:flex lg:flex-wrap">
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-auto"
             >
               <option value="all">Todos los roles</option>
               {["OWNER", "ADMIN", "AGENT", "VIEWER", "HR"].map((r) => (
@@ -306,7 +316,7 @@ export default function UsersPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as "name" | "activity")}
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-auto"
             >
               <option value="activity">Ordenar por actividad</option>
               <option value="name">Ordenar por nombre</option>
@@ -314,16 +324,16 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[1fr,minmax(320px,380px)]">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[1fr,minmax(280px,360px)] lg:gap-8">
           {/* User list */}
-          <section>
-            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-              <div className="border-b border-border px-5 py-3">
+          <section className="min-w-0">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="border-b border-border px-4 py-3 sm:px-5">
                 <h2 className="text-sm font-semibold text-foreground">
                   Usuarios con acceso
                 </h2>
               </div>
-              <div className="space-y-3 p-4 sm:p-5">
+              <div className="space-y-3 p-3 sm:p-4 md:p-5">
                 {members === undefined ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     Cargando…

@@ -175,7 +175,7 @@ export default function TenantsPage() {
   }
 
   return (
-    <div className="w-full min-h-full bg-background">
+    <div className="w-full bg-background">
       <div className="flex w-full flex-col gap-6 p-4 md:p-6 lg:p-8">
         {/* Header — mismo ritmo que el sidebar: limpio, un CTA */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

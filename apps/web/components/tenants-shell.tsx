@@ -609,9 +609,23 @@ export function TenantsShell({ children }: TenantsShellProps) {
     </>
   );
 
+  // Un solo scroll: bloquear scroll del documento mientras el panel está montado
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, []);
+
   return (
     <div
-      className="flex h-screen overflow-hidden bg-muted/40 text-foreground"
+      className="flex h-dvh max-h-dvh overflow-hidden overscroll-none bg-muted/40 text-foreground"
       style={cssVars}
     >
       {/* Overlay móvil */}
@@ -712,8 +726,10 @@ export function TenantsShell({ children }: TenantsShellProps) {
           ) : (
             <div
               className={cn(
-                "flex min-h-0 flex-1 flex-col",
-                isInbox ? "overflow-hidden" : "overflow-y-auto"
+                "flex min-h-0 flex-1 flex-col overscroll-contain",
+                isInbox
+                  ? "overflow-hidden"
+                  : "overflow-y-auto [-webkit-overflow-scrolling:touch]"
               )}
             >
               {children}
