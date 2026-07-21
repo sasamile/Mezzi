@@ -300,11 +300,19 @@ export default function InboxPage() {
   }, [activeMessages, loadingOlder]);
 
   useEffect(() => {
-    const closeContextMenu = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener("click", closeContextMenu);
-      return () => document.removeEventListener("click", closeContextMenu);
-    }
+    if (!contextMenu) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (contextMenuRef.current?.contains(e.target as Node)) return;
+      setContextMenu(null);
+    };
+    // Evitar que el mismo gesto que abre el menú lo cierre al instante.
+    const timer = window.setTimeout(() => {
+      document.addEventListener("pointerdown", onPointerDown, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+    };
   }, [contextMenu]);
 
   // Mantener el menú contextual dentro del viewport y con scroll si hace falta.
@@ -747,8 +755,15 @@ export default function InboxPage() {
   ) => {
     const targetId = contextMenu?.conversationId ?? selectedConversationId;
     if (!targetId) return;
-    await updatePriority({ conversationId: targetId, priority: p });
     setContextMenu(null);
+    try {
+      await updatePriority({ conversationId: targetId, priority: p });
+    } catch (e) {
+      sileo.error({
+        title: "No se pudo cambiar la prioridad",
+        description: e instanceof Error ? e.message : "Error desconocido",
+      });
+    }
   };
 
   const handleSetStatus = async (
@@ -756,8 +771,20 @@ export default function InboxPage() {
   ) => {
     const targetId = contextMenu?.conversationId ?? selectedConversationId;
     if (!targetId) return;
-    await updateStatus({ conversationId: targetId, status });
     setContextMenu(null);
+    try {
+      await updateStatus({ conversationId: targetId, status });
+      if (status === "closed") {
+        sileo.success({ title: "Conversación resuelta" });
+      } else if (status === "open") {
+        sileo.success({ title: "Conversación reabierta" });
+      }
+    } catch (e) {
+      sileo.error({
+        title: "No se pudo actualizar el estado",
+        description: e instanceof Error ? e.message : "Error desconocido",
+      });
+    }
   };
 
   const handleToggleFolder = async (
@@ -778,11 +805,18 @@ export default function InboxPage() {
   const handleContextMenuSetMode = async (userId: Id<"users"> | null) => {
     const targetId = contextMenu?.conversationId;
     if (!targetId) return;
-    await updateAssignedTo({ conversationId: targetId, userId });
-    if (userId === null) {
-      await updateStatus({ conversationId: targetId, status: "open" });
-    }
     setContextMenu(null);
+    try {
+      await updateAssignedTo({ conversationId: targetId, userId });
+      if (userId === null) {
+        await updateStatus({ conversationId: targetId, status: "open" });
+      }
+    } catch (e) {
+      sileo.error({
+        title: "No se pudo cambiar el modo",
+        description: e instanceof Error ? e.message : "Error desconocido",
+      });
+    }
   };
 
   const messageGroups = useMemo(() => {
@@ -1359,7 +1393,8 @@ export default function InboxPage() {
             </div>
             <button
               type="button"
-              onClick={() => handleSetStatus("closed")}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => void handleSetStatus("closed")}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             >
               <CheckCircle2
@@ -1371,7 +1406,8 @@ export default function InboxPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleSetStatus("open")}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => void handleSetStatus("open")}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             >
               Reabrir conversación
@@ -1379,7 +1415,8 @@ export default function InboxPage() {
             <div className="my-1 h-px bg-border" />
             <button
               type="button"
-              onClick={() => handleContextMenuSetMode(null)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => void handleContextMenuSetMode(null)}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             >
               <Bot size={14} strokeWidth={1.8} />
@@ -1387,7 +1424,8 @@ export default function InboxPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleContextMenuSetMode(getHumanUserId())}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => void handleContextMenuSetMode(getHumanUserId())}
               disabled={!getHumanUserId()}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             >
@@ -1402,7 +1440,8 @@ export default function InboxPage() {
               <button
                 key={p}
                 type="button"
-                onClick={() => handleSetPriority(p)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => void handleSetPriority(p)}
                 className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
               >
                 <span
@@ -1430,8 +1469,9 @@ export default function InboxPage() {
                       <button
                         key={f._id}
                         type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={() =>
-                          handleToggleFolder(
+                          void handleToggleFolder(
                             contextMenu.conversationId,
                             f._id,
                             !isIn

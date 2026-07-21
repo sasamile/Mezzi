@@ -2,7 +2,7 @@
 
 import type { MouseEvent } from "react";
 import type { Id } from "@/convex";
-import { AlertTriangle, Bot, CornerUpLeft, Flag, UserRound } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, CornerUpLeft, Flag, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "./contact-avatar";
 import { inbox, PRIORITY_DOT_SAFE } from "./inbox-theme";
@@ -59,12 +59,13 @@ export function ConversationListItem({
       type="button"
       onClick={onSelect}
       onContextMenu={onContextMenu}
-      className={cn(
-        "relative mx-2 mb-0.5 box-border flex h-16 w-[calc(100%-1rem)] shrink-0 items-center gap-2.5 overflow-hidden rounded-xl px-3 pl-3.5 text-left transition-colors duration-150",
-        isActive
-          ? "bg-[var(--primarySoft)]"
-          : "bg-transparent hover:bg-muted/60"
-      )}
+        className={cn(
+          "relative mx-2 mb-0.5 box-border flex h-16 w-[calc(100%-1rem)] shrink-0 items-center gap-2.5 overflow-hidden rounded-xl px-3 pl-3.5 text-left transition-colors duration-150",
+          isActive
+            ? "bg-[var(--primarySoft)]"
+            : "bg-transparent hover:bg-muted/60",
+          conv.status === "closed" && !isActive && "opacity-70"
+        )}
     >
       <span
         aria-hidden
@@ -119,7 +120,14 @@ export function ConversationListItem({
           {/* Columna fija: slot prioridad + bot → el robot no se mueve */}
           <div className="flex h-5 w-11 shrink-0 items-center justify-end gap-1">
             <span className="inline-flex size-5 items-center justify-center">
-              {conv.status === "pending" ? (
+              {conv.status === "closed" ? (
+                <span
+                  className="inline-flex size-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                  title="Resuelta"
+                >
+                  <CheckCircle2 size={11} strokeWidth={2.4} />
+                </span>
+              ) : conv.status === "pending" ? (
                 <span
                   className="inline-flex size-5 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20"
                   title="Necesita atención"
