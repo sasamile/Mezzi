@@ -13,6 +13,7 @@ import { searchProducts } from "./ai/tools/searchProducts";
 import { isUrbrandsTenant } from "./urbrands";
 import { isPdfsModuleEnabled, isEmailOnlySupportTenant, emailOnlySupportPromptBlock, looksLikePqrFollowUp, pqrAlreadyRegisteredMessage, normalizePhoneForPqr } from "./alcarbon";
 import { transcribeAudioFromUrl } from "./ai/transcribe";
+import { persistRemoteMediaToConvex } from "./persistMedia";
 import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
 import {
@@ -162,12 +163,26 @@ export const processInboundMessage = internalAction({
         }
       );
 
+      // YCloud entrega links temporales; persistimos en Convex para que el inbox no se rompa.
+      let mediaUrl = args.mediaUrl;
+      if (mediaUrl && args.mediaType) {
+        const persisted = await persistRemoteMediaToConvex(ctx, mediaUrl);
+        if (persisted) {
+          mediaUrl = persisted;
+        } else {
+          console.warn(
+            "YCloud: no se pudo persistir media; se guarda URL original (puede caducar)",
+            args.mediaType
+          );
+        }
+      }
+
       await ctx.runMutation(api.messages.add, {
         conversationId,
         tenantId: args.tenantId,
         direction: "INBOUND",
         content: args.text,
-        mediaUrl: args.mediaUrl,
+        mediaUrl,
         mediaType: args.mediaType,
       });
 

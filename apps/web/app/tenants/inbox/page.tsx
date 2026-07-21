@@ -20,7 +20,7 @@ import {
 import { ImageViewerModal, type ChatImageItem } from "@/components/inbox/image-viewer-modal";
 import { ImagePreviewModal } from "@/components/inbox/image-preview-modal";
 import { DocumentPreviewModal } from "@/components/inbox/document-preview-modal";
-import { CustomAudioPlayer } from "@/components/inbox/custom-audio-player";
+import { MessageMedia } from "@/components/inbox/message-media";
 import { ConversationsLayout } from "@/components/inbox/conversations-layout";
 import {
   ConversationsListEmpty,
@@ -372,15 +372,29 @@ export default function InboxPage() {
   const hasPriority = (p: string | undefined | null): p is "low" | "normal" | "high" | "urgent" =>
     p === "low" || p === "normal" || p === "high" || p === "urgent";
 
+  /** Conversaciones visibles según carpeta (antes de filtro bot/humano/urgente). */
+  const folderScopedConversations = useMemo(() => {
+    let list = tenantConversations;
+    if (selectedFolder === UNCLASSIFIED) {
+      return list.filter((c) => (c.folderIds ?? []).length === 0);
+    }
+    if (selectedFolder != null && selectedFolder !== "") {
+      return list.filter((c) =>
+        (c.folderIds ?? []).some((id) => String(id) === String(selectedFolder))
+      );
+    }
+    return list;
+  }, [tenantConversations, selectedFolder]);
+
   const counts = useMemo(() => {
-    const list = tenantConversations;
+    const list = folderScopedConversations;
     return {
       all: list.length,
       bot: list.filter((c) => isBotMode(c)).length,
       human: list.filter((c) => !isBotMode(c)).length,
       urgent: list.filter((c) => c.priority === "urgent" || c.priority === "high").length,
     };
-  }, [tenantConversations]);
+  }, [folderScopedConversations]);
 
   const isAdminLike =
     membership?.role === "OWNER" || membership?.role === "ADMIN";
@@ -413,18 +427,15 @@ export default function InboxPage() {
   // Si la carpeta seleccionada deja de estar disponible, volver a "Todas".
   useEffect(() => {
     if (selectedFolder === null || selectedFolder === UNCLASSIFIED) return;
-    if (folders && !accessibleFolders.some((f) => f._id === selectedFolder)) {
+    // Esperar a que carguen las carpetas; no resetear en estados intermedios.
+    if (folders === undefined) return;
+    if (!accessibleFolders.some((f) => f._id === selectedFolder)) {
       setSelectedFolder(null);
     }
   }, [selectedFolder, accessibleFolders, folders]);
 
   const filteredConversations = useMemo(() => {
-    let list = tenantConversations;
-    if (selectedFolder === UNCLASSIFIED) {
-      list = list.filter((c) => (c.folderIds ?? []).length === 0);
-    } else if (selectedFolder !== null) {
-      list = list.filter((c) => (c.folderIds ?? []).includes(selectedFolder as Id<"conversationFolders">));
-    }
+    let list = folderScopedConversations;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -455,7 +466,7 @@ export default function InboxPage() {
       if (a.status !== "pending" && b.status === "pending") return 1;
       return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
     });
-  }, [tenantConversations, filterMode, searchQuery, selectedFolder]);
+  }, [folderScopedConversations, filterMode, searchQuery]);
 
   const handleListScroll = () => {
     const el = listScrollRef.current;
@@ -1087,84 +1098,31 @@ export default function InboxPage() {
                           >
                             {msg.mediaUrl && (
                               <div className="mb-2 overflow-hidden rounded-lg">
-                                {msg.mediaType === "video" ? (
-                                  <video
-                                    src={msg.mediaUrl}
-                                    controls
-                                    className="max-h-64 w-full rounded object-contain"
-                                  />
-                                ) : msg.mediaType === "document" ? (
-                                  <div className="overflow-hidden rounded-lg border border-border bg-card">
-                                    <div className="relative h-48 overflow-hidden bg-muted sm:h-56">
-                                      <iframe
-                                        src={`${msg.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
-                                        className="absolute inset-0 h-full w-full border-0 bg-card"
-                                        title="Vista previa PDF"
-                                      />
-                                    </div>
-                                    <a
-                                      href={msg.mediaUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-3 border-t border-border p-3 transition-colors hover:bg-muted/50"
-                                    >
-                                      <div
-                                        className="grid size-11 shrink-0 place-items-center rounded-lg text-xs font-bold text-white"
-                                        style={{
-                                          backgroundColor: "var(--primaryColor)",
-                                        }}
-                                      >
-                                        PDF
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-semibold text-foreground">
-                                          {msg.content && msg.content !== "Documento"
-                                            ? msg.content
-                                            : "Documento"}
-                                        </p>
-                                        <p className="text-[11px] text-muted-foreground">
-                                          Toca para abrir
-                                        </p>
-                                      </div>
-                                    </a>
-                                  </div>
-                                ) : msg.mediaType === "audio" ? (
-                                  <div className="-ml-1">
-                                    <CustomAudioPlayer
-                                      src={msg.mediaUrl}
-                                      isContact={msg.direction === "INBOUND"}
-                                      avatarSeed={
-                                        msg.direction === "INBOUND"
-                                          ? activeConversation.customerName
-                                          : "Agente"
-                                      }
-                                      timestamp={new Date(
-                                        msg.createdAt
-                                      ).toLocaleTimeString("es", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="max-w-sm cursor-pointer overflow-hidden rounded-md"
-                                    onClick={() => {
-                                      const idx = chatImages.findIndex(
-                                        (img) => img.url === msg.mediaUrl
-                                      );
-                                      setViewerInitialIndex(
-                                        idx !== -1 ? idx : 0
-                                      );
-                                    }}
-                                  >
-                                    <img
-                                      src={msg.mediaUrl}
-                                      alt="Imagen adjunta"
-                                      className="max-h-64 w-full object-contain"
-                                    />
-                                  </div>
-                                )}
+                                <MessageMedia
+                                  mediaUrl={msg.mediaUrl}
+                                  mediaType={msg.mediaType}
+                                  content={msg.content}
+                                  isInbound={msg.direction === "INBOUND"}
+                                  avatarSeed={
+                                    msg.direction === "INBOUND"
+                                      ? activeConversation.customerName
+                                      : "Agente"
+                                  }
+                                  createdAt={msg.createdAt}
+                                  onOpenImage={
+                                    msg.mediaType === "image" ||
+                                    (!msg.mediaType && !!msg.mediaUrl)
+                                      ? () => {
+                                          const idx = chatImages.findIndex(
+                                            (img) => img.url === msg.mediaUrl
+                                          );
+                                          setViewerInitialIndex(
+                                            idx !== -1 ? idx : 0
+                                          );
+                                        }
+                                      : undefined
+                                  }
+                                />
                               </div>
                             )}
                             {(!msg.mediaUrl ||

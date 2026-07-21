@@ -31,10 +31,16 @@ export function ImageViewerModal({
   }, []);
 
   useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") setCurrentIndex((p) => (p + 1) % images.length);
-      if (e.key === "ArrowLeft") setCurrentIndex((p) => (p - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight")
+        setCurrentIndex((p) => (p + 1) % images.length);
+      if (e.key === "ArrowLeft")
+        setCurrentIndex((p) => (p - 1 + images.length) % images.length);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -43,96 +49,107 @@ export function ImageViewerModal({
   if (!images || images.length === 0 || !mounted) return null;
 
   const handleNext = () => setCurrentIndex((p) => (p + 1) % images.length);
-  const handlePrev = () => setCurrentIndex((p) => (p - 1 + images.length) % images.length);
+  const handlePrev = () =>
+    setCurrentIndex((p) => (p - 1 + images.length) % images.length);
+
+  const current = images[currentIndex]!;
 
   return createPortal(
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 animate-in fade-in duration-200">
-      <div className="absolute top-4 right-4 z-110">
-        <Button
-          variant="ghost"
-          onClick={onClose}
-          className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-10 w-10 p-0"
-        >
-          <X className="h-6 w-6" />
-        </Button>
+    <div className="fixed inset-0 z-100 flex flex-col bg-black/90 animate-in fade-in duration-200">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 px-4">
+        <p className="text-sm font-medium text-white/90">Vista ampliada</p>
+        <div className="flex items-center gap-2">
+          {images.length > 1 && (
+            <span className="text-sm text-white/70">
+              {currentIndex + 1} / {images.length}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="h-10 w-10 rounded-full p-0 text-white/70 hover:bg-white/10 hover:text-white"
+            aria-label="Cerrar"
+          >
+            <X className="h-6 w-6" />
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col h-full w-full">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {images.length > 1 && (
+          <>
+            <Button
+              variant="ghost"
+              onClick={handlePrev}
+              className="absolute left-3 top-1/2 z-110 hidden h-12 w-12 -translate-y-1/2 rounded-full p-0 text-white/70 hover:bg-white/10 hover:text-white sm:flex"
+              aria-label="Anterior"
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleNext}
+              className="absolute right-3 top-1/2 z-110 hidden h-12 w-12 -translate-y-1/2 rounded-full p-0 text-white/70 hover:bg-white/10 hover:text-white sm:flex"
+              aria-label="Siguiente"
+            >
+              <ChevronRight className="h-8 w-8" />
+            </Button>
+          </>
+        )}
+
+        {/* Scroll para imágenes altas: se ve el pedazo de abajo */}
         <div
-          className="relative flex-1 flex flex-col items-center justify-center p-4 md:p-16 min-h-0"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-10"
           onClick={onClose}
         >
-          {images.length > 1 && (
-            <>
-              <Button
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePrev();
-                }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-110 text-white/70 hover:text-white hover:bg-white/10 rounded-full h-12 w-12 p-0 hidden sm:flex"
-              >
-                <ChevronLeft className="h-8 w-8" />
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleNext();
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-110 text-white/70 hover:text-white hover:bg-white/10 rounded-full h-12 w-12 p-0 hidden sm:flex"
-              >
-                <ChevronRight className="h-8 w-8" />
-              </Button>
-              <div className="absolute top-6 left-1/2 -translate-x-1/2 text-white/90 text-sm font-medium tracking-wide z-110 drop-shadow-md">
-                {currentIndex + 1} / {images.length}
-              </div>
-            </>
-          )}
-
-          <img
-            key={images[currentIndex].url}
-            src={images[currentIndex].url}
-            alt={`Chat image ${currentIndex + 1}`}
-            className="max-w-full min-h-0 object-contain select-none shadow-2xl animate-in fade-in duration-300 shrink"
+          <div
+            className="mx-auto flex min-h-full w-full max-w-5xl items-start justify-center py-2"
             onClick={(e) => e.stopPropagation()}
-          />
-          {images[currentIndex].text && (
-            <div
-              className="mt-4 shrink-0 px-4 py-2 text-white text-sm md:text-base max-w-2xl text-center animate-in slide-in-from-bottom-2 duration-300"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {images[currentIndex].text}
-            </div>
-          )}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              key={current.url}
+              src={current.url}
+              alt={`Imagen ${currentIndex + 1}`}
+              className="h-auto w-full max-w-full select-none object-contain shadow-2xl animate-in fade-in duration-300"
+            />
+          </div>
         </div>
 
+        {current.text ? (
+          <div className="shrink-0 border-t border-white/10 px-4 py-3 text-center text-sm text-white/90 md:text-base">
+            {current.text}
+          </div>
+        ) : null}
+
         {images.length > 1 && (
-          <div className="w-full shrink-0 flex flex-col z-110">
-            <div className="max-w-3xl w-full mx-auto px-4 pb-4 pt-4 flex flex-col gap-4">
-              <div className="flex items-center justify-center overflow-x-auto pb-2 gap-2">
-                {images.map((img, idx) => (
-                  <div
-                    key={img.url + idx}
-                    onClick={() => setCurrentIndex(idx)}
-                    className={cn(
-                      "relative h-[52px] w-[52px] shrink-0 cursor-pointer overflow-hidden rounded-md border-2 transition-all shadow-sm",
-                      currentIndex === idx ? "border-primary scale-100" : "border-transparent opacity-50 hover:opacity-100 scale-95 hover:scale-100",
-                    )}
-                  >
-                    <img
-                      src={img.url}
-                      alt={`thumbnail-${idx}`}
-                      className="h-full w-full object-cover select-none pointer-events-none"
-                    />
-                  </div>
-                ))}
-              </div>
+          <div className="shrink-0 border-t border-white/10 px-4 py-3">
+            <div className="mx-auto flex max-w-3xl items-center justify-center gap-2 overflow-x-auto pb-1">
+              {images.map((img, idx) => (
+                <button
+                  key={img.url + idx}
+                  type="button"
+                  onClick={() => setCurrentIndex(idx)}
+                  className={cn(
+                    "relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-md border-2 transition-all",
+                    currentIndex === idx
+                      ? "scale-100 border-white"
+                      : "scale-95 border-transparent opacity-50 hover:opacity-100"
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="h-full w-full object-cover select-none pointer-events-none"
+                  />
+                </button>
+              ))}
             </div>
           </div>
         )}
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }

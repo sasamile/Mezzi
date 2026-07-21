@@ -106,15 +106,15 @@ export function FoldersRail({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="max-h-72 w-[min(100vw-2rem,280px)] overflow-y-auto shadow-md"
+          className="max-h-72 w-[min(100vw-2rem,280px)] overflow-y-auto"
         >
           <DropdownMenuLabel className="font-normal text-muted-foreground">
             Filtrar por carpeta
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => onSelect(null)}
-            className="flex items-center gap-2"
+            onSelect={() => onSelect(null)}
+            className="flex cursor-pointer items-center gap-2"
           >
             <Inbox size={14} strokeWidth={2} className="text-(--primaryColor)" />
             <span className="flex min-w-0 flex-1 flex-col">
@@ -127,21 +127,25 @@ export function FoldersRail({
               {totalCount}
             </span>
             {selected === null && (
-              <Check size={14} className="text-(--primaryColor)" />
+              <Check size={14} className="shrink-0 text-(--primaryColor)" />
             )}
           </DropdownMenuItem>
           {showUnclassified && (
             <DropdownMenuItem
-              onClick={() => onSelect(UNCLASSIFIED)}
-              className="flex items-center gap-2"
+              onSelect={() => onSelect(UNCLASSIFIED)}
+              className="flex cursor-pointer items-center gap-2"
             >
-              <Inbox size={14} strokeWidth={2} className="text-muted-foreground" />
+              <Inbox
+                size={14}
+                strokeWidth={2}
+                className="text-muted-foreground"
+              />
               <span className="flex-1">Sin clasificar</span>
               <span className="text-xs tabular-nums text-muted-foreground">
                 {unclassifiedCount}
               </span>
               {selected === UNCLASSIFIED && (
-                <Check size={14} className="text-muted-foreground" />
+                <Check size={14} className="shrink-0 text-muted-foreground" />
               )}
             </DropdownMenuItem>
           )}
@@ -152,8 +156,8 @@ export function FoldersRail({
             return (
               <DropdownMenuItem
                 key={f._id}
-                onClick={() => onSelect(f._id)}
-                className="flex items-center gap-2"
+                onSelect={() => onSelect(f._id)}
+                className="flex cursor-pointer items-center gap-2"
               >
                 <Icon size={14} strokeWidth={2} style={{ color: f.color }} />
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
@@ -163,6 +167,7 @@ export function FoldersRail({
                 {active && (
                   <Check
                     size={14}
+                    className="shrink-0"
                     style={{ color: f.color ?? "var(--primaryColor)" }}
                   />
                 )}
