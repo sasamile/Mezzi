@@ -3,6 +3,7 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const url = process.env.NEXT_PUBLIC_CONVEX_URL;
 const isConfigured = url && url.length > 0 && !url.includes("placeholder");
@@ -27,10 +28,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const convex = new ConvexReactClient(url);
   return (
     <ThemeProvider>
-      <ConvexProvider client={convex}>
-        {children}
-        <Toaster />
-      </ConvexProvider>
+      <TooltipProvider delayDuration={0}>
+        <ConvexProvider client={convex}>
+          {children}
+          <Toaster />
+        </ConvexProvider>
+      </TooltipProvider>
     </ThemeProvider>
   );
 }

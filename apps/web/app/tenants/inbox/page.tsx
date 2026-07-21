@@ -307,6 +307,26 @@ export default function InboxPage() {
     }
   }, [contextMenu]);
 
+  // Mantener el menú contextual dentro del viewport y con scroll si hace falta.
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const el = contextMenuRef.current;
+    const pad = 8;
+    const rect = el.getBoundingClientRect();
+    let x = contextMenu.x;
+    let y = contextMenu.y;
+    if (x + rect.width > window.innerWidth - pad) {
+      x = Math.max(pad, window.innerWidth - rect.width - pad);
+    }
+    if (y + rect.height > window.innerHeight - pad) {
+      y = Math.max(pad, window.innerHeight - rect.height - pad);
+    }
+    if (x !== contextMenu.x || y !== contextMenu.y) {
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    }
+  }, [contextMenu]);
+
   const prevNeedingAttentionRef = useRef<number | null>(null);
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -1157,7 +1177,7 @@ export default function InboxPage() {
                                   "Documento",
                                 ].includes(msg.content) &&
                                 msg.mediaType !== "document")) && (
-                              <p className="whitespace-pre-wrap break-words">
+                              <p className="whitespace-pre-wrap wrap-break-word">
                                 {msg.content}
                               </p>
                             )}
@@ -1371,108 +1391,114 @@ export default function InboxPage() {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-[100] min-w-[210px] overflow-hidden rounded-xl border border-border bg-card p-1 shadow-md"
+          className="fixed z-100 flex w-56 max-h-[min(70vh,420px)] flex-col overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Acciones rápidas
-          </div>
-          <button
-            type="button"
-            onClick={() => handleSetStatus("closed")}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-          >
-            <CheckCircle2 size={15} className="text-[var(--primaryColor)]" strokeWidth={1.8} />
-            Marcar como resuelta
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetStatus("open")}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-          >
-            Reabrir conversación
-          </button>
-          <div className="my-1 h-px bg-border" />
-          <button
-            type="button"
-            onClick={() => handleContextMenuSetMode(null)}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-          >
-            <Bot size={15} strokeWidth={1.8} />
-            Cambiar a Bot
-          </button>
-          <button
-            type="button"
-            onClick={() => handleContextMenuSetMode(getHumanUserId())}
-            disabled={!getHumanUserId()}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-          >
-            <UserRound size={15} strokeWidth={1.8} />
-            Cambiar a humano
-          </button>
-          <div className="my-1 h-px bg-border" />
-          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Prioridad
-          </div>
-          {(["low", "normal", "high", "urgent"] as const).map((p) => (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              Acciones rápidas
+            </div>
             <button
-              key={p}
               type="button"
-              onClick={() => handleSetPriority(p)}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => handleSetStatus("closed")}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             >
-              <span
-                className="size-2 rounded-full"
-                style={{ background: PRIORITY_DOT[p] }}
+              <CheckCircle2
+                size={14}
+                className="text-(--primaryColor)"
+                strokeWidth={1.8}
               />
-              {PRIORITY_LABELS[p]}
+              Marcar como resuelta
             </button>
-          ))}
-          {(folders?.length ?? 0) > 0 && (
-            <>
-              <div className="my-1 h-px bg-border" />
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Carpetas
-              </div>
-              {(() => {
-                const target = tenantConversations.find(
-                  (c) => c._id === contextMenu.conversationId
-                );
-                const current = new Set(target?.folderIds ?? []);
-                return (folders ?? []).map((f) => {
-                  const FolderIcon = folderIcon(f.icon);
-                  const isIn = current.has(f._id);
-                  return (
-                    <button
-                      key={f._id}
-                      type="button"
-                      onClick={() =>
-                        handleToggleFolder(
-                          contextMenu.conversationId,
-                          f._id,
-                          !isIn
-                        )
-                      }
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                    >
-                      <FolderIcon
-                        size={14}
-                        style={{ color: f.color ?? "#64748b" }}
-                      />
-                      <span className="flex-1 truncate">{f.name}</span>
-                      {isIn && (
-                        <Check
-                          size={14}
-                          className="shrink-0 text-[var(--primaryColor)]"
-                        />
-                      )}
-                    </button>
+            <button
+              type="button"
+              onClick={() => handleSetStatus("open")}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            >
+              Reabrir conversación
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <button
+              type="button"
+              onClick={() => handleContextMenuSetMode(null)}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            >
+              <Bot size={14} strokeWidth={1.8} />
+              Cambiar a Bot
+            </button>
+            <button
+              type="button"
+              onClick={() => handleContextMenuSetMode(getHumanUserId())}
+              disabled={!getHumanUserId()}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+            >
+              <UserRound size={14} strokeWidth={1.8} />
+              Cambiar a humano
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              Prioridad
+            </div>
+            {(["low", "normal", "high", "urgent"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handleSetPriority(p)}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              >
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: PRIORITY_DOT[p] }}
+                />
+                {PRIORITY_LABELS[p]}
+              </button>
+            ))}
+            {(folders?.length ?? 0) > 0 && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  Carpetas
+                </div>
+                {(() => {
+                  const target = tenantConversations.find(
+                    (c) => c._id === contextMenu.conversationId
                   );
-                });
-              })()}
-            </>
-          )}
+                  const current = new Set(target?.folderIds ?? []);
+                  return (folders ?? []).map((f) => {
+                    const FolderIcon = folderIcon(f.icon);
+                    const isIn = current.has(f._id);
+                    return (
+                      <button
+                        key={f._id}
+                        type="button"
+                        onClick={() =>
+                          handleToggleFolder(
+                            contextMenu.conversationId,
+                            f._id,
+                            !isIn
+                          )
+                        }
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <FolderIcon
+                          size={14}
+                          style={{ color: f.color ?? "#64748b" }}
+                        />
+                        <span className="flex-1 truncate">{f.name}</span>
+                        {isIn && (
+                          <Check
+                            size={14}
+                            className="shrink-0 text-(--primaryColor)"
+                          />
+                        )}
+                      </button>
+                    );
+                  });
+                })()}
+              </>
+            )}
+          </div>
         </div>
       )}
     </>

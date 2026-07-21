@@ -240,7 +240,7 @@ export default function TenantsPage() {
         {statsLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-[120px] rounded-xl" />
+              <Skeleton key={i} className="h-30 rounded-xl" />
             ))}
           </div>
         ) : (
@@ -291,11 +291,11 @@ export default function TenantsPage() {
             bodyClassName="pt-2"
           >
             {statsLoading ? (
-              <Skeleton className="h-[260px] w-full rounded-lg" />
+              <Skeleton className="h-65 w-full rounded-lg" />
             ) : stats?.sparkline?.length ? (
               <ConversationsAreaChart data={stats.sparkline} />
             ) : (
-              <div className="flex h-[260px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+              <div className="flex h-65 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                 <MessageSquare className="size-5 opacity-40" strokeWidth={1.5} />
                 Sin datos en este período
               </div>
@@ -309,7 +309,7 @@ export default function TenantsPage() {
             bodyClassName="items-center justify-center gap-6 sm:flex-row"
           >
             <AiResolutionRing pct={botResolvedPct} size={128} />
-            <div className="w-full space-y-4 sm:w-auto sm:min-w-[140px]">
+            <div className="w-full space-y-4 sm:w-auto sm:min-w-35">
               <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
                 <p className="text-xs font-medium text-muted-foreground">
                   Resueltas por IA
@@ -331,7 +331,7 @@ export default function TenantsPage() {
         </div>
 
         {/* Hourly + activity — misma altura */}
-        <div className="grid items-stretch gap-4 lg:grid-cols-7 lg:min-h-[320px]">
+        <div className="grid items-stretch gap-4 lg:grid-cols-7 lg:min-h-80">
           <DashboardPanel
             className="lg:col-span-4"
             title="Actividad por hora"
@@ -350,7 +350,7 @@ export default function TenantsPage() {
           >
             {hourlyData?.length === 24 ? (
               <div className="min-h-0 flex-1">
-                <HourlyActivityChart data={hourlyData} className="h-full min-h-[200px]" />
+                <HourlyActivityChart data={hourlyData} className="h-full min-h-50" />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">

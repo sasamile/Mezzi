@@ -104,22 +104,48 @@ export function FoldersRail({
             />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[min(100vw-2rem,280px)] shadow-md">
-          <DropdownMenuLabel>Filtrar por carpeta</DropdownMenuLabel>
+        <DropdownMenuContent
+          align="start"
+          className="max-h-72 w-[min(100vw-2rem,280px)] overflow-y-auto shadow-md"
+        >
+          <DropdownMenuLabel className="font-normal text-muted-foreground">
+            Filtrar por carpeta
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => onSelect(null)}
             className="flex items-center gap-2"
           >
-            <Inbox size={14} strokeWidth={2} className="text-[var(--primaryColor)]" />
-            <span className="flex-1">Todas</span>
+            <Inbox size={14} strokeWidth={2} className="text-(--primaryColor)" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span>Todas</span>
+              <span className="text-[11px] font-normal text-muted-foreground">
+                Incluye sin clasificar
+              </span>
+            </span>
             <span className="text-xs tabular-nums text-muted-foreground">
               {totalCount}
             </span>
             {selected === null && (
-              <Check size={14} className="text-[var(--primaryColor)]" />
+              <Check size={14} className="text-(--primaryColor)" />
             )}
           </DropdownMenuItem>
+          {showUnclassified && (
+            <DropdownMenuItem
+              onClick={() => onSelect(UNCLASSIFIED)}
+              className="flex items-center gap-2"
+            >
+              <Inbox size={14} strokeWidth={2} className="text-muted-foreground" />
+              <span className="flex-1">Sin clasificar</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {unclassifiedCount}
+              </span>
+              {selected === UNCLASSIFIED && (
+                <Check size={14} className="text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
+          )}
+          {folders.length > 0 && <DropdownMenuSeparator />}
           {folders.map((f) => {
             const Icon = folderIcon(f.icon);
             const active = selected === f._id;
@@ -135,28 +161,14 @@ export function FoldersRail({
                   {counts[f._id] ?? 0}
                 </span>
                 {active && (
-                  <Check size={14} style={{ color: f.color ?? "var(--primaryColor)" }} />
+                  <Check
+                    size={14}
+                    style={{ color: f.color ?? "var(--primaryColor)" }}
+                  />
                 )}
               </DropdownMenuItem>
             );
           })}
-          {showUnclassified && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onSelect(UNCLASSIFIED)}
-                className="flex items-center gap-2"
-              >
-                <span className="flex-1">Sin clasificar</span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {unclassifiedCount}
-                </span>
-                {selected === UNCLASSIFIED && (
-                  <Check size={14} className="text-muted-foreground" />
-                )}
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

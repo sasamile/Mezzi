@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { useQuery } from "convex/react";
 import { api } from "@/convex";
+import type { Id } from "@/convex";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +16,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Id } from "@/convex";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
 import {
   DEFAULT_SECONDARY,
@@ -38,17 +58,15 @@ import {
   User as UserIcon,
   Users,
   Link2,
-  Flame,
+  GalleryVerticalEnd,
   Settings,
   LogOut,
-  ChevronLeft,
-  ChevronDown,
-  Menu,
-  X,
+  ChevronsUpDown,
+  Moon,
+  Sun,
   type LucideIcon,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { useTheme } from "next-themes";
 
 interface TenantsShellProps {
   children: ReactNode;
@@ -62,7 +80,206 @@ interface NavEntry {
   group: string;
   disabled?: boolean;
   disabledTitle?: string;
-  module?: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs";
+  module?:
+    | "pqr"
+    | "pedidos"
+    | "reservas"
+    | "conocimiento"
+    | "trabajaConNosotros"
+    | "pdfs";
+}
+
+const PAGE_TITLES: Record<string, string> = {
+  "/tenants": "Dashboard",
+  "/tenants/inbox": "Inbox",
+  "/tenants/knowledge": "Conocimiento",
+  "/tenants/menu": "Documentos PDF",
+  "/tenants/aprendizaje": "Aprendizaje",
+  "/tenants/reservas": "Reservas",
+  "/tenants/solicitudes": "Pedidos",
+  "/tenants/pqrs": "PQRs",
+  "/tenants/trabaja-con-nosotros": "Trabaja con Nosotros",
+  "/tenants/clientes": "Clientes",
+  "/tenants/integraciones": "Integraciones",
+  "/tenants/users": "Usuarios",
+  "/tenants/ajustes": "Ajustes",
+};
+
+function resolvePageTitle(pathname: string): string {
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const match = Object.keys(PAGE_TITLES)
+    .filter((k) => k !== "/tenants" && pathname.startsWith(k))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? PAGE_TITLES[match]! : "Panel";
+}
+
+function ThemeMenuItem() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted && theme === "dark";
+
+  return (
+    <DropdownMenuItem
+      className="cursor-pointer"
+      onSelect={(e) => {
+        e.preventDefault();
+        setTheme(isDark ? "light" : "dark");
+      }}
+    >
+      {isDark ? (
+        <Sun className="mr-2 size-4" strokeWidth={1.5} />
+      ) : (
+        <Moon className="mr-2 size-4" strokeWidth={1.5} />
+      )}
+      {isDark ? "Modo claro" : "Modo oscuro"}
+    </DropdownMenuItem>
+  );
+}
+
+function formatDisplayName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  if (/^(al|ai)[\s_-]*carb[oó]n$/i.test(trimmed)) {
+    return "Al Carbón";
+  }
+  const letters = trimmed.replace(/[^a-zA-ZÀ-ÿ]/g, "");
+  if (letters.length > 1 && letters === letters.toUpperCase()) {
+    return trimmed
+      .toLowerCase()
+      .replace(/(^|[\s\-_/])(\S)/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
+  }
+  return trimmed;
+}
+
+function TenantBrandHeader({
+  brandName,
+  brandSubtitle,
+  primaryColor,
+  isLoading,
+}: {
+  brandName: string;
+  brandSubtitle: string;
+  primaryColor: string;
+  isLoading: boolean;
+}) {
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="lg"
+          asChild
+          className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+        >
+          <Link href="/tenants">
+            <div
+              className="flex aspect-square size-8 items-center justify-center rounded-lg text-white"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <GalleryVerticalEnd className="size-4" />
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight normal-case">
+              <span className="truncate font-semibold">
+                {isLoading ? "…" : brandName}
+              </span>
+              <span className="truncate text-xs">{brandSubtitle}</span>
+            </div>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
+function NavUserFooter({
+  name,
+  email,
+  isOwner,
+  baseHref,
+  tenantId,
+  onLogout,
+}: {
+  name: string;
+  email: string;
+  isOwner: boolean;
+  baseHref: string;
+  tenantId: Id<"tenants"> | null;
+  onLogout: () => void;
+}) {
+  const { isMobile } = useSidebar();
+  const initial = (name || "U").charAt(0).toUpperCase();
+  const avatarSrc = `https://i.pravatar.cc/128?u=${encodeURIComponent(email || name || "user")}`;
+
+  const avatar = (
+    <Avatar className="size-8 rounded-lg">
+      <AvatarImage src={avatarSrc} alt={name} />
+      <AvatarFallback className="rounded-lg">{initial}</AvatarFallback>
+    </Avatar>
+  );
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              {avatar}
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">{name}</span>
+                <span className="truncate text-xs">{email}</span>
+              </div>
+              <ChevronsUpDown className="ml-auto size-4" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            side={isMobile ? "bottom" : "right"}
+            align="end"
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="p-0 font-normal">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                {avatar}
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{name}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {email}
+                  </span>
+                </div>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <ThemeMenuItem />
+            {isOwner && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={tenantId ? `${baseHref}/ajustes` : baseHref}
+                    className="cursor-pointer"
+                  >
+                    <Settings className="mr-2 size-4" strokeWidth={1.5} />
+                    Ajustes
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer text-destructive focus:text-destructive"
+              onSelect={onLogout}
+            >
+              <LogOut className="mr-2 size-4" strokeWidth={1.5} />
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
 }
 
 export function TenantsShell({ children }: TenantsShellProps) {
@@ -70,21 +287,6 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { tenantId } = useTenant();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!mobileNavOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileNavOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mobileNavOpen]);
 
   const tenant = useQuery(api.tenants.get, tenantId ? { tenantId } : "skip");
   const ycloud = useQuery(
@@ -106,6 +308,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
 
   const baseHref = "/tenants";
   const isInbox = pathname.startsWith(`${baseHref}/inbox`);
+  const pageTitle = resolvePageTitle(pathname);
 
   const hasLoadedTenantRef = useRef(false);
   const prevTenantIdRef = useRef<string | null>(null);
@@ -131,7 +334,9 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const secondaryColor = isLoading
     ? DEFAULT_SECONDARY
     : resolveSecondaryColor(displayTenant?.secondaryColor);
-  const brandName = displayTenant?.name?.trim() || "Tenant";
+  const brandName = formatDisplayName(
+    displayTenant?.name?.trim() || "Tenant"
+  );
   const brandSubtitle = "Panel";
 
   const cssVars = useMemo(
@@ -146,7 +351,13 @@ export function TenantsShell({ children }: TenantsShellProps) {
   const host =
     typeof window !== "undefined" ? window.location.hostname : undefined;
   const hasModule = (
-    key: "pqr" | "pedidos" | "reservas" | "conocimiento" | "trabajaConNosotros" | "pdfs"
+    key:
+      | "pqr"
+      | "pedidos"
+      | "reservas"
+      | "conocimiento"
+      | "trabajaConNosotros"
+      | "pdfs"
   ) => {
     if (key === "pdfs") {
       return isPdfsModuleEnabled(modules, displayTenant, host);
@@ -163,105 +374,104 @@ export function TenantsShell({ children }: TenantsShellProps) {
 
   const navEntries: NavEntry[] = (
     [
-    {
-      href: "/tenants",
-      pageKey: "dashboard",
-      Icon: LayoutGrid,
-      label: "Dashboard",
-      group: "General",
-    },
-    {
-      href: `${baseHref}/inbox`,
-      pageKey: "inbox",
-      Icon: Mail,
-      label: "Inbox",
-      group: "General",
-      disabled: !tenantId || !ycloudConnected,
-      disabledTitle: "Conecta YCloud en Integraciones",
-    },
-    {
-      href: `${baseHref}/knowledge`,
-      pageKey: "knowledge",
-      Icon: BookOpen,
-      label: "Conocimiento",
-      group: "Conocimiento",
-      module: "conocimiento" as const,
-    },
-    {
-      href: `${baseHref}/menu`,
-      pageKey: "menu",
-      Icon: FileText,
-      label: "Documentos PDF",
-      group: "Conocimiento",
-      module: "pdfs" as const,
-    },
-    {
-      href: `${baseHref}/aprendizaje`,
-      pageKey: "aprendizaje",
-      Icon: GraduationCap,
-      label: "Aprendizaje",
-      group: "Conocimiento",
-      module: "conocimiento" as const,
-    },
-    {
-      href: `${baseHref}/reservas`,
-      pageKey: "reservas",
-      Icon: CalendarDays,
-      label: "Reservas",
-      group: "General",
-      module: "reservas" as const,
-    },
-    {
-      href: `${baseHref}/solicitudes`,
-      pageKey: "pedidos",
-      Icon: Truck,
-      label: "Pedidos",
-      group: "General",
-      module: "pedidos" as const,
-    },
-    {
-      href: `${baseHref}/pqrs`,
-      pageKey: "pqrs",
-      Icon: Headphones,
-      label: "PQRs",
-      group: "General",
-      module: "pqr" as const,
-    },
-    {
-      href: `${baseHref}/trabaja-con-nosotros`,
-      pageKey: "trabajaConNosotros",
-      Icon: Briefcase,
-      label: "Trabaja con Nosotros",
-      group: "General",
-      module: "trabajaConNosotros" as const,
-    },
-    {
-      href: `${baseHref}/clientes`,
-      pageKey: "clientes",
-      Icon: UserIcon,
-      label: "Clientes",
-      group: "General",
-    },
-    {
-      href: `${baseHref}/integraciones`,
-      pageKey: "integraciones",
-      Icon: Link2,
-      label: "Integraciones",
-      group: "Integraciones",
-    },
-    {
-      href: `${baseHref}/users`,
-      pageKey: "users",
-      Icon: Users,
-      label: "Usuarios",
-      group: "Usuarios",
-    },
-  ] as NavEntry[]
+      {
+        href: "/tenants",
+        pageKey: "dashboard",
+        Icon: LayoutGrid,
+        label: "Dashboard",
+        group: "General",
+      },
+      {
+        href: `${baseHref}/inbox`,
+        pageKey: "inbox",
+        Icon: Mail,
+        label: "Inbox",
+        group: "General",
+        disabled: !tenantId || !ycloudConnected,
+        disabledTitle: "Conecta YCloud en Integraciones",
+      },
+      {
+        href: `${baseHref}/knowledge`,
+        pageKey: "knowledge",
+        Icon: BookOpen,
+        label: "Conocimiento",
+        group: "Conocimiento",
+        module: "conocimiento" as const,
+      },
+      {
+        href: `${baseHref}/menu`,
+        pageKey: "menu",
+        Icon: FileText,
+        label: "Documentos PDF",
+        group: "Conocimiento",
+        module: "pdfs" as const,
+      },
+      {
+        href: `${baseHref}/aprendizaje`,
+        pageKey: "aprendizaje",
+        Icon: GraduationCap,
+        label: "Aprendizaje",
+        group: "Conocimiento",
+        module: "conocimiento" as const,
+      },
+      {
+        href: `${baseHref}/reservas`,
+        pageKey: "reservas",
+        Icon: CalendarDays,
+        label: "Reservas",
+        group: "Operación",
+        module: "reservas" as const,
+      },
+      {
+        href: `${baseHref}/solicitudes`,
+        pageKey: "pedidos",
+        Icon: Truck,
+        label: "Pedidos",
+        group: "Operación",
+        module: "pedidos" as const,
+      },
+      {
+        href: `${baseHref}/pqrs`,
+        pageKey: "pqrs",
+        Icon: Headphones,
+        label: "PQRs",
+        group: "Operación",
+        module: "pqr" as const,
+      },
+      {
+        href: `${baseHref}/trabaja-con-nosotros`,
+        pageKey: "trabajaConNosotros",
+        Icon: Briefcase,
+        label: "Trabaja con Nosotros",
+        group: "Operación",
+        module: "trabajaConNosotros" as const,
+      },
+      {
+        href: `${baseHref}/clientes`,
+        pageKey: "clientes",
+        Icon: UserIcon,
+        label: "Clientes",
+        group: "Operación",
+      },
+      {
+        href: `${baseHref}/integraciones`,
+        pageKey: "integraciones",
+        Icon: Link2,
+        label: "Integraciones",
+        group: "Administración",
+      },
+      {
+        href: `${baseHref}/users`,
+        pageKey: "users",
+        Icon: Users,
+        label: "Usuarios",
+        group: "Administración",
+      },
+    ] as NavEntry[]
   ).filter((e) => {
     if (!tenantId && e.group !== "General") return false;
     if (e.module && !hasModule(e.module)) return false;
     if (!hasPageAccess(e.pageKey)) return false;
-    // Solo el propietario ve Usuarios e Integraciones
     if (
       (e.pageKey === "users" || e.pageKey === "integraciones") &&
       !isOwner
@@ -273,343 +483,6 @@ export function TenantsShell({ children }: TenantsShellProps) {
 
   const groups = [...new Set(navEntries.map((e) => e.group))];
 
-  const brandBlock = (compact: boolean) => (
-    <Link
-      href="/tenants"
-      onClick={() => setMobileNavOpen(false)}
-      title={brandName}
-      className={cn(
-        "flex items-center overflow-hidden rounded-xl transition-colors",
-        compact
-          ? "mx-auto size-10 justify-center hover:bg-muted"
-          : "w-full gap-3 px-2 py-1.5 hover:bg-muted"
-      )}
-    >
-      <span
-        className={cn(
-          "grid shrink-0 place-items-center rounded-[10px] shadow-sm",
-          compact ? "size-8" : "size-9"
-        )}
-        style={{ backgroundColor: primaryColor }}
-        aria-hidden
-      >
-        <Flame
-          size={compact ? 16 : 18}
-          strokeWidth={2}
-          className="text-white"
-        />
-      </span>
-      {!compact && (
-        <span className="min-w-0 flex-1 text-left leading-tight">
-          <span className="block truncate text-sm font-medium text-foreground">
-            {isLoading ? "…" : brandName}
-          </span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {brandSubtitle}
-          </span>
-        </span>
-      )}
-    </Link>
-  );
-
-  const iconNav = (
-    <div className="flex flex-col items-center gap-1 pt-2">
-      {navEntries.map((entry) => {
-        const active = !entry.disabled && isActive(entry.href);
-        const showBadge =
-          !entry.disabled &&
-          entry.href.includes("/inbox") &&
-          (needingAttention ?? 0) > 0;
-        const tip = entry.disabled
-          ? (entry.disabledTitle ?? entry.label)
-          : entry.label;
-        const iconBtn = (
-          <span
-            className={cn(
-              "relative flex size-10 items-center justify-center rounded-xl transition-colors duration-150",
-              entry.disabled
-                ? "cursor-not-allowed opacity-50"
-                : "cursor-pointer",
-              active
-                ? "bg-(--primarySoft) text-(--primaryColor)"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <entry.Icon size={19} strokeWidth={1.7} />
-            {showBadge && (
-              <span
-                className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full px-0.5 text-[9px] font-bold tabular-nums text-white"
-                style={{ background: "var(--primaryColor)" }}
-              >
-                {needingAttention}
-              </span>
-            )}
-          </span>
-        );
-        return entry.disabled ? (
-          <SidebarTooltip key={entry.label} label={tip}>
-            {iconBtn}
-          </SidebarTooltip>
-        ) : (
-          <SidebarTooltip key={entry.label} label={tip}>
-            <Link
-              href={entry.href}
-              className="flex justify-center"
-              onClick={() => setMobileNavOpen(false)}
-              aria-label={entry.label}
-            >
-              {iconBtn}
-            </Link>
-          </SidebarTooltip>
-        );
-      })}
-    </div>
-  );
-
-  const labelNav = (
-    <div className="flex flex-col gap-1 pt-3">
-      {groups.map((group) => (
-        <div key={group} className="flex flex-col">
-          <p className="mb-1.5 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {group}
-          </p>
-          {navEntries
-            .filter((e) => e.group === group)
-            .map((entry) => {
-              const active = !entry.disabled && isActive(entry.href);
-              const showAttn =
-                !entry.disabled &&
-                entry.href.includes("/inbox") &&
-                (needingAttention ?? 0) > 0;
-              const content = (
-                <span
-                  className={cn(
-                    "relative mx-1.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-colors duration-150",
-                    entry.disabled
-                      ? "cursor-not-allowed opacity-60"
-                      : "cursor-pointer",
-                    active
-                      ? "bg-(--primarySoft) font-semibold text-foreground ring-1 ring-(--primaryColor)/10"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <entry.Icon
-                    size={18}
-                    strokeWidth={1.7}
-                    className="shrink-0"
-                    style={
-                      active ? { color: "var(--primaryColor)" } : undefined
-                    }
-                  />
-                  <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-                  {showAttn && (
-                    <span
-                      className="rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums text-white"
-                      style={{ background: "var(--primaryColor)" }}
-                    >
-                      {needingAttention}
-                    </span>
-                  )}
-                  {entry.disabled && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      off
-                    </span>
-                  )}
-                </span>
-              );
-              return entry.disabled ? (
-                <span key={entry.label} title={entry.disabledTitle}>
-                  {content}
-                </span>
-              ) : (
-                <Link
-                  key={entry.label}
-                  href={entry.href}
-                  onClick={() => setMobileNavOpen(false)}
-                >
-                  {content}
-                </Link>
-              );
-            })}
-        </div>
-      ))}
-    </div>
-  );
-
-  const userMenu = (compact: boolean) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center transition-colors hover:bg-muted",
-            compact
-              ? "size-9 shrink-0 justify-center rounded-xl"
-              : "w-full gap-3 px-3 py-3"
-          )}
-          aria-label="Menú de cuenta"
-        >
-          <div
-            className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full text-xs font-semibold text-white"
-            style={{
-              background: isLoading
-                ? "var(--muted)"
-                : `linear-gradient(135deg, var(--primaryColor), var(--primaryDark))`,
-            }}
-          >
-            {(user?.name ?? "U").charAt(0).toUpperCase()}
-          </div>
-          {!compact && (
-            <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-[13px] font-semibold leading-tight text-foreground">
-                {user?.name ?? "Usuario"}
-              </p>
-              <p className="mt-0.5 truncate text-[10.5px] text-muted-foreground">
-                {user?.email ?? ""}
-              </p>
-            </div>
-          )}
-          {!compact && (
-            <ChevronDown
-              size={16}
-              strokeWidth={1.7}
-              className="shrink-0 text-muted-foreground"
-            />
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 shadow-md">
-        <DropdownMenuLabel>
-          <p className="font-semibold">{user?.name ?? "Usuario"}</p>
-          <p className="text-xs font-normal text-muted-foreground">
-            {user?.email ?? ""}
-          </p>
-        </DropdownMenuLabel>
-        {isOwner && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link
-                href={tenantId ? `${baseHref}/ajustes` : baseHref}
-                className="cursor-pointer"
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <Settings size={16} strokeWidth={1.5} className="mr-2" />
-                Ajustes
-              </Link>
-            </DropdownMenuItem>
-          </>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="cursor-pointer text-destructive focus:text-destructive"
-          onSelect={() => {
-            logout();
-            router.push("/login");
-          }}
-        >
-          <LogOut size={16} strokeWidth={1.5} className="mr-2" />
-          Cerrar sesión
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const sidebarInner = (opts: {
-    iconOnly: boolean;
-    showClose?: boolean;
-    showCollapseToggle?: boolean;
-  }) => (
-    <>
-      <div
-        className={cn(
-          "px-3 py-3",
-          opts.iconOnly && !opts.showClose && "flex justify-center",
-          opts.showClose && "flex items-center gap-2"
-        )}
-      >
-        <div className={cn(opts.showClose && "min-w-0 flex-1")}>
-          {brandBlock(opts.iconOnly)}
-        </div>
-        {opts.showClose && (
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(false)}
-            className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Cerrar menú"
-          >
-            <X size={18} strokeWidth={1.7} />
-          </button>
-        )}
-      </div>
-
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
-        {isLoading ? (
-          <div className="flex flex-col gap-2 px-2 pt-2">
-            <Skeleton className="h-8 w-full rounded-lg" />
-            <Skeleton className="h-8 w-full rounded-lg" />
-            <Skeleton className="h-8 w-full rounded-lg" />
-            <Skeleton className="h-6 w-3/4 rounded-lg" />
-          </div>
-        ) : opts.iconOnly ? (
-          iconNav
-        ) : (
-          labelNav
-        )}
-      </nav>
-
-      <div className="shrink-0 border-t border-border">
-        <div
-          className={cn(
-            "px-1 pt-2",
-            opts.iconOnly && "flex justify-center px-0"
-          )}
-        >
-          <ThemeToggle collapsed={opts.iconOnly} />
-        </div>
-        <div
-          className={cn(
-            opts.iconOnly ? "flex justify-center py-1.5" : undefined
-          )}
-        >
-          {userMenu(opts.iconOnly)}
-        </div>
-        {opts.showCollapseToggle && (
-          <button
-            type="button"
-            onClick={() => setCollapsed((x) => !x)}
-            className="flex w-full items-center justify-center gap-2 border-t border-border py-2 text-muted-foreground transition-colors hover:bg-muted"
-            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
-          >
-            {collapsed ? (
-              <SidebarTooltip label="Expandir menú" side="right">
-                <span className="inline-flex size-8 items-center justify-center">
-                  <ChevronLeft
-                    size={16}
-                    strokeWidth={1.7}
-                    className="rotate-180 transition-transform duration-200"
-                  />
-                </span>
-              </SidebarTooltip>
-            ) : (
-              <>
-                <ChevronLeft
-                  size={16}
-                  strokeWidth={1.7}
-                  className="transition-transform duration-200"
-                />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">
-                  Colapsar
-                </span>
-              </>
-            )}
-          </button>
-        )}
-      </div>
-    </>
-  );
-
-  // Un solo scroll: bloquear scroll del documento mientras el panel está montado
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -624,119 +497,169 @@ export function TenantsShell({ children }: TenantsShellProps) {
   }, []);
 
   return (
-    <div
-      className="flex h-dvh max-h-dvh overflow-hidden overscroll-none bg-muted/40 text-foreground"
-      style={cssVars}
+    <SidebarProvider
+      style={
+        {
+          ...cssVars,
+          "--sidebar-width": "16rem",
+          "--sidebar-width-icon": "3.25rem",
+        } as CSSProperties
+      }
+      className="h-dvh max-h-dvh overflow-hidden overscroll-none"
     >
-      {/* Overlay móvil */}
-      <div
-        role="presentation"
-        className={cn(
-          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 lg:hidden",
-          mobileNavOpen
-            ? "opacity-100"
-            : "pointer-events-none opacity-0"
-        )}
-        onClick={() => setMobileNavOpen(false)}
-      />
+      <Sidebar collapsible="icon" variant="inset">
+        <SidebarHeader>
+          <TenantBrandHeader
+            brandName={brandName}
+            brandSubtitle={brandSubtitle}
+            primaryColor={primaryColor}
+            isLoading={isLoading}
+          />
+        </SidebarHeader>
 
-      {/* Drawer móvil */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[min(280px,88vw)] flex-col overflow-hidden border-r border-border bg-card shadow-md transition-transform duration-200 ease-out lg:hidden",
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-        aria-hidden={!mobileNavOpen}
-      >
-        {sidebarInner({ iconOnly: false, showClose: true })}
-      </aside>
+        <SidebarContent className="scrollbar-none">
+          {isLoading ? (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <div className="flex flex-col gap-2 px-2 py-1">
+                  <Skeleton className="h-8 w-full rounded-md" />
+                  <Skeleton className="h-8 w-full rounded-md" />
+                  <Skeleton className="h-8 w-3/4 rounded-md" />
+                </div>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : (
+            groups.map((group) => (
+              <SidebarGroup key={group}>
+                <SidebarGroupLabel>{group}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navEntries
+                      .filter((e) => e.group === group)
+                      .map((entry) => {
+                        const active =
+                          !entry.disabled && isActive(entry.href);
+                        const showBadge =
+                          !entry.disabled &&
+                          entry.href.includes("/inbox") &&
+                          (needingAttention ?? 0) > 0;
 
-      {/* Sidebar desktop */}
-      <aside
-        className={cn(
-          "m-3 hidden shrink-0 flex-col overflow-hidden rounded-2xl transition-all duration-200 ease-out lg:flex",
-          collapsed ? "w-[72px]" : "w-[240px]"
-        )}
-      >
-        {sidebarInner({
-          iconOnly: collapsed,
-          showCollapseToggle: true,
-        })}
-      </aside>
+                        if (entry.disabled) {
+                          return (
+                            <SidebarMenuItem key={entry.label}>
+                              <SidebarMenuButton
+                                disabled
+                                tooltip={
+                                  entry.disabledTitle ?? entry.label
+                                }
+                                className="opacity-50"
+                              >
+                                <entry.Icon />
+                                <span>{entry.label}</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        }
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden lg:my-3 lg:mr-3">
-        {/* Barra móvil: menú · marca · cuenta */}
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-3 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-            className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Abrir menú"
+                        return (
+                          <SidebarMenuItem key={entry.label}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={active}
+                              tooltip={entry.label}
+                            >
+                              <Link href={entry.href}>
+                                <entry.Icon
+                                  className={
+                                    active
+                                      ? "text-(--primaryColor)"
+                                      : undefined
+                                  }
+                                  style={
+                                    active
+                                      ? { color: "var(--primaryColor)" }
+                                      : undefined
+                                  }
+                                />
+                                <span>{entry.label}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                            {showBadge && (
+                              <SidebarMenuBadge>
+                                {needingAttention}
+                              </SidebarMenuBadge>
+                            )}
+                          </SidebarMenuItem>
+                        );
+                      })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))
+          )}
+        </SidebarContent>
+
+        <SidebarFooter>
+          <NavUserFooter
+            name={user?.name ?? "Usuario"}
+            email={user?.email ?? ""}
+            isOwner={isOwner}
+            baseHref={baseHref}
+            tenantId={tenantId}
+            onLogout={() => {
+              logout();
+              router.push("/login");
+            }}
+          />
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+
+      <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-1.5 text-sm normal-case"
           >
-            <Menu size={20} strokeWidth={1.7} />
-          </button>
-          <Link
-            href="/tenants"
-            className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden"
-          >
-            <span
-              className="grid size-8 shrink-0 place-items-center rounded-lg"
-              style={{ backgroundColor: primaryColor }}
-              aria-hidden
-            >
-              <Flame size={15} strokeWidth={2} className="text-white" />
-            </span>
-            <span className="min-w-0 truncate text-sm font-medium tracking-tight text-foreground">
+            <span className="hidden truncate text-muted-foreground sm:inline">
               {isLoading ? "…" : brandName}
             </span>
-          </Link>
-          {userMenu(true)}
+            <span className="hidden text-muted-foreground sm:inline">/</span>
+            <span className="truncate font-medium text-foreground">
+              {pageTitle}
+            </span>
+          </nav>
         </header>
 
         <div
           className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-hidden bg-card",
-            "border-0 shadow-none lg:rounded-2xl lg:border lg:border-border lg:shadow-sm"
+            "flex min-h-0 flex-1 flex-col overscroll-contain bg-background",
+            isInbox
+              ? "overflow-hidden"
+              : "overflow-y-auto [-webkit-overflow-scrolling:touch]"
           )}
         >
           {isLoading ? (
-            <div className="flex flex-1 flex-col overflow-y-auto p-6 sm:p-8 md:p-10">
-              <div className="mx-auto w-full space-y-8 p-4 md:p-6 lg:p-8">
+            <div className="flex flex-1 flex-col overflow-y-auto p-6 sm:p-8">
+              <div className="mx-auto w-full max-w-6xl space-y-8">
                 <div className="space-y-3">
                   <Skeleton className="h-8 w-64" />
-                  <Skeleton className="h-4 w-96" />
+                  <Skeleton className="h-4 w-96 max-w-full" />
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                   {[1, 2, 3, 4].map((i) => (
                     <Skeleton key={i} className="h-28 rounded-xl" />
                   ))}
                 </div>
-                <div className="grid gap-8 lg:grid-cols-3">
-                  <div className="space-y-4 lg:col-span-2">
-                    <Skeleton className="h-48 rounded-xl" />
-                    <Skeleton className="h-36 rounded-xl" />
-                  </div>
-                  <div className="space-y-4">
-                    <Skeleton className="h-32 rounded-xl" />
-                    <Skeleton className="h-48 rounded-xl" />
-                  </div>
-                </div>
               </div>
             </div>
           ) : (
-            <div
-              className={cn(
-                "flex min-h-0 flex-1 flex-col overscroll-contain",
-                isInbox
-                  ? "overflow-hidden"
-                  : "overflow-y-auto [-webkit-overflow-scrolling:touch]"
-              )}
-            >
-              {children}
-            </div>
+            children
           )}
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
