@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
@@ -61,14 +62,50 @@ export const listByTenant = query({
     tenantId: v.id("tenants"),
     /** Si se pasa, filtra según los permisos de carpeta del usuario. */
     userId: v.optional(v.id("users")),
+    /** Límite duro (default 80). Evita full-scan del tenant. */
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const all = await ctx.db
+    const limit = Math.min(Math.max(args.limit ?? 80, 1), 150);
+    const batch = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_last_message", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
-      .collect();
-    return await filterByFolderAccess(ctx, args.tenantId, args.userId, all);
+      .take(limit);
+    return await filterByFolderAccess(ctx, args.tenantId, args.userId, batch);
+  },
+});
+
+/**
+ * Lista paginada (scroll infinito del sidebar).
+ * Usa el índice by_tenant_last_message — no lee todo el tenant.
+ */
+export const listByTenantPaginated = query({
+  args: {
+    tenantId: v.id("tenants"),
+    userId: v.optional(v.id("users")),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("conversations")
+      .withIndex("by_tenant_last_message", (q) =>
+        q.eq("tenantId", args.tenantId)
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const page = await filterByFolderAccess(
+      ctx,
+      args.tenantId,
+      args.userId,
+      result.page
+    );
+
+    return {
+      ...result,
+      page,
+    };
   },
 });
 
@@ -78,17 +115,19 @@ export const countNeedingAttention = query({
     userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const all = await ctx.db
+    const pending = await ctx.db
       .query("conversations")
-      .withIndex("by_tenant_last_message", (q) => q.eq("tenantId", args.tenantId))
+      .withIndex("by_tenant_status", (q) =>
+        q.eq("tenantId", args.tenantId).eq("status", "pending")
+      )
       .collect();
     const visible = await filterByFolderAccess(
       ctx,
       args.tenantId,
       args.userId,
-      all
+      pending
     );
-    return visible.filter((c) => c.status === "pending").length;
+    return visible.length;
   },
 });
 

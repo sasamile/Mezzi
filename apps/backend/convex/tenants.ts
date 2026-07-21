@@ -156,8 +156,11 @@ export const getByHost = query({
   handler: async (ctx, args) => {
     const host = normalizeHost(args.host);
     if (!host) return null;
-    const tenants = await ctx.db.query("tenants").collect();
-    return tenants.find((tenant) => normalizeHost(tenant.customDomain) === host) ?? null;
+    // Index lookup — evita full-scan de tenants (era el #1 en Database I/O).
+    return await ctx.db
+      .query("tenants")
+      .withIndex("by_custom_domain", (q) => q.eq("customDomain", host))
+      .first();
   },
 });
 

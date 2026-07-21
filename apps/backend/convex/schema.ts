@@ -63,7 +63,8 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   })
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_custom_domain", ["customDomain"]),
 
   // Usuarios del sistema (puedes enlazar después con Convex Auth)
   users: defineTable({
@@ -156,6 +157,7 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_last_message", ["tenantId", "lastMessageAt"])
     .index("by_tenant_contact", ["tenantId", "externalContactId"])
+    .index("by_tenant_status", ["tenantId", "status"])
     .index("by_thread_id", ["threadId"]),
 
   // Carpetas del inbox por tenant (Facturas, RRHH, Compras, Proveedores…)
@@ -192,6 +194,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])
+    .index("by_conversation_created", ["conversationId", "createdAt"])
     .index("by_tenant", ["tenantId"]),
 
   // Conocimiento por restaurante (texto manual o archivo subido)

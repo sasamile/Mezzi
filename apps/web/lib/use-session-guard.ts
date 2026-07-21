@@ -12,6 +12,8 @@ import { sileo } from "@/lib/toast";
 /**
  * Expulsa la sesión si el usuario ya no existe en BD o perdió
  * todo acceso a restaurantes (p. ej. le quitaron la membresía).
+ *
+ * No llama getByHost: eso ya lo hace useHostScopedTenant (evitar I/O duplicado).
  */
 export function useSessionGuard() {
   const router = useRouter();
@@ -32,10 +34,6 @@ export function useSessionGuard() {
     tenantId && user?._id && !isLoading
       ? { tenantId, userId: user._id as Id<"users"> }
       : "skip"
-  );
-  const scopedTenant = useQuery(
-    api.tenants.getByHost,
-    typeof window !== "undefined" ? { host: window.location.hostname } : "skip"
   );
 
   useEffect(() => {
@@ -72,26 +70,7 @@ export function useSessionGuard() {
       return;
     }
 
-    // Dominio dedicado sin membresía en ese tenant
-    if (
-      scopedTenant &&
-      memberships !== undefined &&
-      !memberships.some((m) => m.tenantId === scopedTenant._id) &&
-      !user.isSuperadmin
-    ) {
-      kickedRef.current = true;
-      logout();
-      setTenantId(null);
-      setPersistedTenantId(null);
-      sileo.error({
-        title: "Acceso revocado",
-        description: "Ya no tienes acceso a este restaurante.",
-      });
-      router.replace("/login");
-      return;
-    }
-
-    // Tenían un tenant seleccionado y les quitaron la membresía
+    // Tenant seleccionado (p. ej. dominio dedicado) sin membresía
     if (tenantId && membership === null) {
       const other = memberships.find((m) => m.tenantId !== tenantId && m.tenant);
       if (other?.tenant) {
@@ -117,7 +96,6 @@ export function useSessionGuard() {
     memberships,
     membership,
     tenantId,
-    scopedTenant,
     logout,
     setTenantId,
     router,

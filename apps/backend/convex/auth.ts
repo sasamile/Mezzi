@@ -185,8 +185,10 @@ export const login = mutation({
     const host = normalizeHost(args.host);
     let forcedTenantId: string | undefined;
     if (host) {
-      const tenants = await ctx.db.query("tenants").collect();
-      const scopedTenant = tenants.find((tenant) => normalizeHost(tenant.customDomain) === host);
+      const scopedTenant = await ctx.db
+        .query("tenants")
+        .withIndex("by_custom_domain", (q) => q.eq("customDomain", host))
+        .first();
       if (scopedTenant) {
         if (!user.isSuperadmin) {
           const membership = await ctx.db

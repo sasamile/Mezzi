@@ -1,9 +1,26 @@
 import { internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+/** @deprecated Prefer listRecentByConversation — evita cargar hilos enteros. */
 export const listByConversation = query({
-  args: { conversationId: v.id("conversations") },
+  args: {
+    conversationId: v.id("conversations"),
+    /** Si se pasa, solo los N más recientes (orden cronológico). */
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
+    const limit = args.limit;
+    if (limit != null) {
+      const capped = Math.min(Math.max(limit, 1), 200);
+      const recent = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) =>
+          q.eq("conversationId", args.conversationId)
+        )
+        .order("desc")
+        .take(capped);
+      return recent.reverse();
+    }
     return await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>
@@ -11,6 +28,45 @@ export const listByConversation = query({
       )
       .order("asc")
       .collect();
+  },
+});
+
+/**
+ * Últimos N mensajes + cursor para cargar más antiguos.
+ * Reduce I/O en conversaciones largas.
+ */
+export const listRecentByConversation = query({
+  args: {
+    conversationId: v.id("conversations"),
+    limit: v.optional(v.number()),
+    /** createdAt del mensaje más antiguo ya cargado */
+    before: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+    const before = args.before;
+
+    const batch = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation_created", (q) =>
+        before != null
+          ? q
+              .eq("conversationId", args.conversationId)
+              .lt("createdAt", before)
+          : q.eq("conversationId", args.conversationId)
+      )
+      .order("desc")
+      .take(limit + 1);
+
+    const hasMore = batch.length > limit;
+    const pageDesc = hasMore ? batch.slice(0, limit) : batch;
+    const messages = pageDesc.reverse();
+
+    return {
+      messages,
+      hasMore,
+      oldestCreatedAt: messages.length > 0 ? messages[0].createdAt : null,
+    };
   },
 });
 
