@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { useQuery, useAction, useMutation } from "convex/react";
+import {
+  useQuery,
+  usePaginatedQuery,
+  useAction,
+  useMutation,
+} from "convex/react";
 import { api } from "@/convex";
-import type { Id } from "@/convex";
+import type { Doc, Id } from "@/convex";
 import { useTenant } from "@/lib/tenant-context";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -115,12 +120,20 @@ export default function InboxPage() {
   const [improving, setImproving] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<FolderSelection>(null);
   const [folderManagerOpen, setFolderManagerOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(40);
+  /** Mensajes más antiguos que la ventana reactiva reciente */
+  const [olderMessages, setOlderMessages] = useState<Doc<"messages">[]>([]);
+  const [olderCursor, setOlderCursor] = useState<number | undefined>(undefined);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
+  const skipAutoScrollRef = useRef(false);
+  const lastMergedOlderCursorRef = useRef<number | undefined>(undefined);
 
   const PAGE_SIZE = 40;
+  const MESSAGE_PAGE_SIZE = 50;
 
   useEffect(() => {
     setMounted(true);
@@ -140,12 +153,21 @@ export default function InboxPage() {
     api.integrations.getYCloud,
     tenantId ? { tenantId } : "skip"
   );
-  const tenantConversations = useQuery(
-    api.conversations.listByTenant,
+  const {
+    results: tenantConversations = [],
+    status: conversationsStatus,
+    loadMore: loadMoreConversations,
+  } = usePaginatedQuery(
+    api.conversations.listByTenantPaginated,
     tenantId
       ? { tenantId, userId: (user?._id as Id<"users">) ?? undefined }
-      : "skip"
+      : "skip",
+    { initialNumItems: PAGE_SIZE }
   );
+  const conversationsLoading = conversationsStatus === "LoadingFirstPage";
+  const canLoadMoreConversations =
+    conversationsStatus === "CanLoadMore" ||
+    conversationsStatus === "LoadingMore";
   const folders = useQuery(
     api.conversationFolders.listByTenant,
     tenantId ? { tenantId } : "skip"
@@ -156,9 +178,27 @@ export default function InboxPage() {
       ? { tenantId, userId: user._id as Id<"users"> }
       : "skip"
   );
-  const activeMessages = useQuery(
-    api.messages.listByConversation,
-    selectedConversationId ? { conversationId: selectedConversationId } : "skip"
+  const recentMessagesPage = useQuery(
+    api.messages.listRecentByConversation,
+    selectedConversationId
+      ? { conversationId: selectedConversationId, limit: MESSAGE_PAGE_SIZE }
+      : "skip"
+  );
+  const olderMessagesPage = useQuery(
+    api.messages.listRecentByConversation,
+    selectedConversationId && olderCursor != null
+      ? {
+          conversationId: selectedConversationId,
+          limit: MESSAGE_PAGE_SIZE,
+          before: olderCursor,
+        }
+      : "skip"
+  );
+  const selectedConversationDoc = useQuery(
+    api.conversations.get,
+    selectedConversationId
+      ? { conversationId: selectedConversationId }
+      : "skip"
   );
   const members = useQuery(
     api.users.listByTenant,
@@ -188,10 +228,61 @@ export default function InboxPage() {
   );
 
   useEffect(() => {
-    if (tenantConversations?.length && !selectedConversationId) {
+    if (tenantConversations.length && !selectedConversationId) {
       setSelectedConversationId(tenantConversations[0]._id);
     }
   }, [tenantConversations, selectedConversationId]);
+
+  useEffect(() => {
+    setOlderMessages([]);
+    setOlderCursor(undefined);
+    setHasMoreOlder(false);
+    setLoadingOlder(false);
+    lastMergedOlderCursorRef.current = undefined;
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (
+      recentMessagesPage &&
+      olderMessages.length === 0 &&
+      olderCursor == null
+    ) {
+      setHasMoreOlder(recentMessagesPage.hasMore);
+    }
+  }, [
+    recentMessagesPage,
+    olderMessages.length,
+    olderCursor,
+    selectedConversationId,
+  ]);
+
+  useEffect(() => {
+    if (!olderMessagesPage || olderCursor == null) return;
+    if (lastMergedOlderCursorRef.current === olderCursor) return;
+    lastMergedOlderCursorRef.current = olderCursor;
+    const scrollEl = messagesScrollRef.current;
+    const prevHeight = scrollEl?.scrollHeight ?? 0;
+    setOlderMessages((prev) => {
+      const ids = new Set(prev.map((m) => m._id));
+      const incoming = olderMessagesPage.messages.filter((m) => !ids.has(m._id));
+      return [...incoming, ...prev];
+    });
+    setHasMoreOlder(olderMessagesPage.hasMore);
+    setLoadingOlder(false);
+    skipAutoScrollRef.current = true;
+    requestAnimationFrame(() => {
+      if (scrollEl) {
+        scrollEl.scrollTop = scrollEl.scrollHeight - prevHeight;
+      }
+    });
+  }, [olderMessagesPage, olderCursor]);
+
+  const activeMessages = useMemo(() => {
+    const recent = recentMessagesPage?.messages ?? [];
+    const recentIds = new Set(recent.map((m) => m._id));
+    const older = olderMessages.filter((m) => !recentIds.has(m._id));
+    return [...older, ...recent];
+  }, [recentMessagesPage, olderMessages]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -200,8 +291,13 @@ export default function InboxPage() {
   }, [selectedConversationId]);
 
   useEffect(() => {
+    if (skipAutoScrollRef.current) {
+      skipAutoScrollRef.current = false;
+      return;
+    }
+    if (loadingOlder) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages]);
+  }, [activeMessages, loadingOlder]);
 
   useEffect(() => {
     const closeContextMenu = () => setContextMenu(null);
@@ -232,9 +328,10 @@ export default function InboxPage() {
     }
   }, [needingAttention]);
 
-  const activeConversation = tenantConversations?.find(
-    (c) => c._id === selectedConversationId
-  );
+  const activeConversation =
+    tenantConversations.find((c) => c._id === selectedConversationId) ??
+    selectedConversationDoc ??
+    undefined;
 
   useEffect(() => {
     if (selectedConversationId && activeConversation && typeof window !== "undefined") {
@@ -256,7 +353,7 @@ export default function InboxPage() {
     p === "low" || p === "normal" || p === "high" || p === "urgent";
 
   const counts = useMemo(() => {
-    const list = tenantConversations ?? [];
+    const list = tenantConversations;
     return {
       all: list.length,
       bot: list.filter((c) => isBotMode(c)).length,
@@ -282,7 +379,7 @@ export default function InboxPage() {
   }, [membership, isAdminLike]);
 
   const folderCounts = useMemo(() => {
-    const list = tenantConversations ?? [];
+    const list = tenantConversations;
     const counts: Record<string, number> = {};
     let unclassified = 0;
     for (const c of list) {
@@ -302,7 +399,7 @@ export default function InboxPage() {
   }, [selectedFolder, accessibleFolders, folders]);
 
   const filteredConversations = useMemo(() => {
-    let list = tenantConversations ?? [];
+    let list = tenantConversations;
     if (selectedFolder === UNCLASSIFIED) {
       list = list.filter((c) => (c.folderIds ?? []).length === 0);
     } else if (selectedFolder !== null) {
@@ -340,29 +437,26 @@ export default function InboxPage() {
     });
   }, [tenantConversations, filterMode, searchQuery, selectedFolder]);
 
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [filterMode, searchQuery, selectedFolder]);
-
-  const visibleConversations = useMemo(
-    () => filteredConversations.slice(0, visibleCount),
-    [filteredConversations, visibleCount]
-  );
-  const hasMoreConversations = visibleCount < filteredConversations.length;
-
   const handleListScroll = () => {
     const el = listScrollRef.current;
-    if (!el || !hasMoreConversations || loadingMoreRef.current) return;
+    if (!el || conversationsStatus !== "CanLoadMore" || loadingMoreRef.current)
+      return;
     const nearBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight < 160;
     if (!nearBottom) return;
     loadingMoreRef.current = true;
-    setVisibleCount((n) =>
-      Math.min(n + PAGE_SIZE, filteredConversations.length)
-    );
+    loadMoreConversations(PAGE_SIZE);
     requestAnimationFrame(() => {
       loadingMoreRef.current = false;
     });
+  };
+
+  const handleLoadOlderMessages = () => {
+    if (!hasMoreOlder || loadingOlder || !activeMessages.length) return;
+    const oldest = activeMessages[0]?.createdAt;
+    if (oldest == null) return;
+    setLoadingOlder(true);
+    setOlderCursor(oldest);
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -523,7 +617,7 @@ export default function InboxPage() {
     setSending(true);
     setSendError(null);
     try {
-      const active = tenantConversations?.find((c) => c._id === selectedConversationId);
+      const active = tenantConversations.find((c) => c._id === selectedConversationId);
       const wasBot = active && isBotMode(active);
       const userIdToAssign = (user?._id as Id<"users">) ?? members?.find((m) => m.user)?.user?._id;
       if (wasBot && userIdToAssign) {
@@ -661,7 +755,7 @@ export default function InboxPage() {
   };
 
   const messageGroups = useMemo(() => {
-    if (!activeMessages?.length) return [];
+    if (!activeMessages.length) return [];
     const groups: { date: string; messages: typeof activeMessages }[] = [];
     let currentDate = "";
     let currentMessages: typeof activeMessages = [];
@@ -680,13 +774,13 @@ export default function InboxPage() {
   }, [activeMessages]);
 
   const mediaMessages = useMemo(
-    () => activeMessages?.filter((m) => m.mediaUrl) ?? [],
+    () => activeMessages.filter((m) => m.mediaUrl),
     [activeMessages]
   );
 
   const chatImages: ChatImageItem[] = useMemo(
     () =>
-      (activeMessages ?? [])
+      activeMessages
         .filter((m) => m.mediaType === "image" && m.mediaUrl)
         .map((m) => ({ url: m.mediaUrl!, text: m.content || "" })),
     [activeMessages]
@@ -697,7 +791,7 @@ export default function InboxPage() {
     setSending(true);
     setSendError(null);
     try {
-      const active = tenantConversations?.find((c) => c._id === selectedConversationId);
+      const active = tenantConversations.find((c) => c._id === selectedConversationId);
       const wasBot = active && isBotMode(active);
       const userIdToAssign = (user._id as Id<"users">) ?? members?.find((m) => m.user)?.user?._id;
       if (wasBot && userIdToAssign) {
@@ -734,7 +828,7 @@ export default function InboxPage() {
     setSending(true);
     setSendError(null);
     try {
-      const active = tenantConversations?.find((c) => c._id === selectedConversationId);
+      const active = tenantConversations.find((c) => c._id === selectedConversationId);
       const wasBot = active && isBotMode(active);
       const userIdToAssign = (user._id as Id<"users">) ?? members?.find((m) => m.user)?.user?._id;
       if (wasBot && userIdToAssign) {
@@ -832,13 +926,13 @@ export default function InboxPage() {
         onScroll={handleListScroll}
         className="scrollbar-none min-h-0 flex-1 overflow-y-auto py-1.5"
       >
-        {tenantConversations === undefined ? (
+        {conversationsLoading ? (
           <ConversationsListSkeleton />
         ) : filteredConversations.length === 0 ? (
           <ConversationsListEmpty />
         ) : (
           <>
-            {visibleConversations.map((conv) => {
+            {filteredConversations.map((conv) => {
             const isActive = conv._id === selectedConversationId;
             const bot = isBotMode(conv);
             const isNew =
@@ -877,9 +971,11 @@ export default function InboxPage() {
               />
             );
           })}
-            {hasMoreConversations && (
+            {canLoadMoreConversations && (
               <p className="py-3 text-center text-[11px] text-muted-foreground">
-                Cargando más…
+                {conversationsStatus === "LoadingMore"
+                  ? "Cargando más…"
+                  : "Desplázate para cargar más"}
               </p>
             )}
           </>
@@ -925,7 +1021,24 @@ export default function InboxPage() {
               onToggleContactInfo={() => setShowContactInfo((x) => !x)}
             />
 
-            <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            <div
+              ref={messagesScrollRef}
+              className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5"
+            >
+              {hasMoreOlder && (
+                <div className="mb-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleLoadOlderMessages}
+                    disabled={loadingOlder}
+                    className="rounded-md border border-border bg-card px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-60"
+                  >
+                    {loadingOlder
+                      ? "Cargando…"
+                      : "Cargar mensajes anteriores"}
+                  </button>
+                </div>
+              )}
               {messageGroups.map(({ date, messages }) => (
                 <div key={date} className="mb-5">
                   <div className="mb-3 flex items-center gap-2">
@@ -1067,7 +1180,7 @@ export default function InboxPage() {
                 </div>
               ))}
               <div ref={messagesEndRef} />
-              {activeMessages?.length === 0 && (
+              {activeMessages.length === 0 && recentMessagesPage !== undefined && (
                 <div className="flex h-40 items-center justify-center">
                   <p className="text-sm text-muted-foreground">
                     No hay mensajes aún
@@ -1323,7 +1436,7 @@ export default function InboxPage() {
                 Carpetas
               </div>
               {(() => {
-                const target = tenantConversations?.find(
+                const target = tenantConversations.find(
                   (c) => c._id === contextMenu.conversationId
                 );
                 const current = new Set(target?.folderIds ?? []);
