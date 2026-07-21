@@ -38,6 +38,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { isPdfsModuleEnabled } from "@/lib/alcarbon";
+import { proxiedTenantAssetUrl } from "@/lib/tenant-asset-url";
 import {
   DEFAULT_SECONDARY,
   resolvePrimaryColor,
@@ -156,13 +157,17 @@ function TenantBrandHeader({
   brandName,
   brandSubtitle,
   primaryColor,
+  logoUrl,
   isLoading,
 }: {
   brandName: string;
   brandSubtitle: string;
   primaryColor: string;
+  logoUrl?: string | null;
   isLoading: boolean;
 }) {
+  const resolvedLogo = proxiedTenantAssetUrl(logoUrl) ?? logoUrl ?? undefined;
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -172,12 +177,21 @@ function TenantBrandHeader({
           className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
         >
           <Link href="/tenants">
-            <div
-              className="flex aspect-square size-8 items-center justify-center rounded-lg text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <GalleryVerticalEnd className="size-4" />
-            </div>
+            <Avatar className="size-8 rounded-lg">
+              {resolvedLogo ? (
+                <AvatarImage
+                  src={resolvedLogo}
+                  alt={brandName}
+                  className="bg-white object-contain p-0.5"
+                />
+              ) : null}
+              <AvatarFallback
+                className="rounded-lg text-white"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <GalleryVerticalEnd className="size-4" />
+              </AvatarFallback>
+            </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight normal-case">
               <span className="truncate font-semibold">
                 {isLoading ? "…" : brandName}
@@ -194,6 +208,9 @@ function TenantBrandHeader({
 function NavUserFooter({
   name,
   email,
+  logoUrl,
+  brandName,
+  primaryColor,
   isOwner,
   baseHref,
   tenantId,
@@ -201,19 +218,33 @@ function NavUserFooter({
 }: {
   name: string;
   email: string;
+  logoUrl?: string | null;
+  brandName: string;
+  primaryColor: string;
   isOwner: boolean;
   baseHref: string;
   tenantId: Id<"tenants"> | null;
   onLogout: () => void;
 }) {
   const { isMobile } = useSidebar();
-  const initial = (name || "U").charAt(0).toUpperCase();
-  const avatarSrc = `https://i.pravatar.cc/128?u=${encodeURIComponent(email || name || "user")}`;
+  const initial = (name || brandName || "U").charAt(0).toUpperCase();
+  const resolvedLogo = proxiedTenantAssetUrl(logoUrl) ?? logoUrl ?? undefined;
 
   const avatar = (
     <Avatar className="size-8 rounded-lg">
-      <AvatarImage src={avatarSrc} alt={name} />
-      <AvatarFallback className="rounded-lg">{initial}</AvatarFallback>
+      {resolvedLogo ? (
+        <AvatarImage
+          src={resolvedLogo}
+          alt={brandName || name}
+          className="bg-white object-contain p-0.5"
+        />
+      ) : null}
+      <AvatarFallback
+        className="rounded-lg text-xs font-semibold text-white"
+        style={{ backgroundColor: primaryColor }}
+      >
+        {initial}
+      </AvatarFallback>
     </Avatar>
   );
 
@@ -513,6 +544,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
             brandName={brandName}
             brandSubtitle={brandSubtitle}
             primaryColor={primaryColor}
+            logoUrl={displayTenant?.logoUrl}
             isLoading={isLoading}
           />
         </SidebarHeader>
@@ -603,6 +635,9 @@ export function TenantsShell({ children }: TenantsShellProps) {
           <NavUserFooter
             name={user?.name ?? "Usuario"}
             email={user?.email ?? ""}
+            logoUrl={displayTenant?.logoUrl}
+            brandName={brandName}
+            primaryColor={primaryColor}
             isOwner={isOwner}
             baseHref={baseHref}
             tenantId={tenantId}
