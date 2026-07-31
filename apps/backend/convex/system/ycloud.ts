@@ -1130,9 +1130,15 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           (tr) => typeof tr.result === "string" && tr.result.startsWith("RESERVA_ERROR:")
         );
 
-        if (directText && !reservationFailed) {
-          await trySend(directText);
-        } else if (reservationFailed) {
+        // ORDEN IMPORTANTE: los errores de reserva y los tools que ya escribieron
+        // al cliente se evalúan ANTES que `directText`.
+        //
+        // Con el maxSteps: 1 anterior, el modelo se detenía tras llamar a la
+        // herramienta y `directText` venía vacío, así que el orden daba igual.
+        // Ahora el modelo sí continúa y genera texto después del tool: si
+        // `directText` fuera primero, un tool que ya envió su confirmación
+        // provocaría un segundo mensaje al cliente por el mismo evento.
+        if (reservationFailed) {
           const rawReservationError = toolResults
             .map((tr) => (typeof tr.result === "string" ? tr.result : ""))
             .find((r) => r.startsWith("RESERVA_ERROR:"));
@@ -1145,6 +1151,8 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           await trySend(reservationError || fallbackErrorText);
         } else if (toolAlreadySentMessage) {
           // El tool ya envió la confirmación al cliente
+        } else if (directText) {
+          await trySend(directText);
         } else {
           let sent = false;
 

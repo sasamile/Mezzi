@@ -5,7 +5,13 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { assertSuperadmin } from "./lib/tenantAccess";
+import {
+  generateSessionToken,
+  getSession,
+  SESSION_TTL_MS,
+} from "./lib/session";
 
 function normalizeHost(value?: string): string | null {
   if (!value) return null;
@@ -176,8 +182,11 @@ export const getByEmail = internalQuery({
 });
 
 /**
- * Login: valida email + password y devuelve el usuario (sin passwordHash).
- * Usar desde el front: auth.login({ email, password })
+ * Login: valida email + password, abre una sesión y devuelve su token.
+ *
+ * El token es lo único que el cliente guarda. A partir de aquí, las funciones
+ * derivan la identidad del token en el servidor en vez de aceptar un
+ * `actorUserId` que el cliente elige.
  */
 export const login = mutation({
   args: {
@@ -201,7 +210,7 @@ export const login = mutation({
     }
 
     const host = normalizeHost(args.host);
-    let forcedTenantId: string | undefined;
+    let forcedTenantId: Id<"tenants"> | undefined;
     if (host) {
       const scopedTenant = await ctx.db
         .query("tenants")
@@ -223,7 +232,65 @@ export const login = mutation({
       }
     }
 
+    const now = Date.now();
+    const token = generateSessionToken();
+    await ctx.db.insert("sessions", {
+      userId: user._id,
+      token,
+      createdAt: now,
+      expiresAt: now + SESSION_TTL_MS,
+      forcedTenantId,
+    });
+
     const { passwordHash: _, ...safe } = user;
-    return { ...safe, forcedTenantId };
+    return { ...safe, token, forcedTenantId };
+  },
+});
+
+/**
+ * Cierra la sesión actual. Idempotente: si el token ya no existe, no falla.
+ * Aprovecha para limpiar las sesiones vencidas del mismo usuario.
+ */
+export const logout = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+
+    if (!session) return null;
+
+    const userId = session.userId;
+    await ctx.db.delete(session._id);
+
+    const now = Date.now();
+    const stale = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const s of stale) {
+      if (s.expiresAt < now) await ctx.db.delete(s._id);
+    }
+
+    return null;
+  },
+});
+
+/**
+ * Usuario de la sesión actual, o null si el token no vale. Es lo que usa el
+ * frontend al arrancar para restaurar la sesión desde el token guardado.
+ */
+export const me = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const session = await getSession(ctx, args.token);
+    if (!session) return null;
+
+    const user = await ctx.db.get(session.userId);
+    if (!user) return null;
+
+    const { passwordHash: _, ...safe } = user;
+    return { ...safe, forcedTenantId: session.forcedTenantId };
   },
 });

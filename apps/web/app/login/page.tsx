@@ -122,12 +122,8 @@ function LoginContent() {
       if (user.forcedTenantId) {
         setPersistedTenantId(user.forcedTenantId as Id<"tenants">);
       }
-      login({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        isSuperadmin: user.isSuperadmin,
-      });
+      // Solo el token: los datos del usuario los resuelve el servidor con él.
+      login(user.token);
       sileo.success({
         title: "Bienvenido",
         description: user.name ? `Hola, ${user.name}` : "Sesión iniciada.",

@@ -25,6 +25,7 @@ import type * as jobLocations from "../jobLocations.js";
 import type * as knowledge from "../knowledge.js";
 import type * as knowledgeFileParsing from "../knowledgeFileParsing.js";
 import type * as learning from "../learning.js";
+import type * as lib_session from "../lib/session.js";
 import type * as lib_tenantAccess from "../lib/tenantAccess.js";
 import type * as messages from "../messages.js";
 import type * as occupancy from "../occupancy.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   knowledge: typeof knowledge;
   knowledgeFileParsing: typeof knowledgeFileParsing;
   learning: typeof learning;
+  "lib/session": typeof lib_session;
   "lib/tenantAccess": typeof lib_tenantAccess;
   messages: typeof messages;
   occupancy: typeof occupancy;

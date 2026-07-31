@@ -66,15 +66,35 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_custom_domain", ["customDomain"]),
 
-  // Usuarios del sistema (puedes enlazar después con Convex Auth)
+  // Usuarios del sistema
   users: defineTable({
     name: v.string(),
     email: v.string(),
-    passwordHash: v.optional(v.string()), // hash bcrypt para email/password
+    passwordHash: v.optional(v.string()), // salt:hash PBKDF2-SHA256
     isSuperadmin: v.boolean(),
     createdAt: v.number(),
   })
     .index("by_email", ["email"]),
+
+  /**
+   * Sesiones de usuario. El token es lo único que el cliente conserva; la
+   * identidad se deriva de él en el servidor, nunca de un argumento que el
+   * cliente pueda elegir.
+   *
+   * Reemplaza al patrón `actorUserId`, que era falsificable: bastaba conocer
+   * el _id de un superadmin para actuar en su nombre.
+   */
+  sessions: defineTable({
+    userId: v.id("users"),
+    /** 32 bytes aleatorios en hex. Opaco: no codifica nada del usuario. */
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    /** Tenant al que queda fijada la sesión cuando se entra por dominio propio. */
+    forcedTenantId: v.optional(v.id("tenants")),
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"]),
 
   // Relación usuario ↔ restaurante + rol + permisos por página
   userTenants: defineTable({

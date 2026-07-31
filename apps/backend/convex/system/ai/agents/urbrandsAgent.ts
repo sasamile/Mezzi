@@ -12,6 +12,9 @@ import { OPENAI_MODEL_PRIMARY } from "../openaiModels";
 export const urbrandsAgent = new Agent(components.agent, {
   chat: openai.chat(OPENAI_MODEL_PRIMARY),
   instructions: URBRANDS_AGENT_INSTRUCTIONS,
+  /** Ver la nota en supportAgent.ts: sin esto el modelo nunca lee el resultado
+   *  de sus propias herramientas (búsqueda de productos, catálogo, pedidos). */
+  maxSteps: 5,
   contextOptions: {
     recentMessages: 20,
     excludeToolMessages: true,
