@@ -35,7 +35,10 @@ export function AdministradoresTab({
   const { user } = useAuth();
   const actorUserId = user?._id as Id<"users"> | undefined;
   const members = useQuery(api.users.listByTenant, { tenantId });
-  const allUsers = useQuery(api.users.list);
+  const allUsers = useQuery(
+    api.users.list,
+    actorUserId ? { actorUserId } : "skip"
+  );
   const inviteToTenant = useMutation(api.users.inviteToTenant);
   const updateRole = useMutation(api.users.updateRole);
   const removeFromTenant = useMutation(api.users.removeFromTenant);

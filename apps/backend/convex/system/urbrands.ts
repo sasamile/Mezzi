@@ -41,13 +41,26 @@ export interface UrbrandsWooConfig {
 
 /**
  * Configuración de la API WooCommerce de URBRANDS.
+ *
+ * Ambos valores vienen exclusivamente del entorno (Convex Dashboard → Settings →
+ * Environment Variables). No hay fallback: un fallback a credenciales de
+ * producción nunca falla de forma ruidosa y siempre queda expuesto en el repo.
  */
 export function getUrbrandsWooConfig(): UrbrandsWooConfig {
-  const baseUrl =
-    process.env.URBRANDS_WC_URL?.trim() || "https://www.dev.urbrandsclothing.com";
-  const authHeader =
-    process.env.URBRANDS_WC_AUTH?.trim() ||
-    "Basic Y2tfNTE2NThlZmYwZTRkMGRkNDY0M2Y2N2NkZjgzMTk0NjdlODY4NTg4MDpjc19mZTE3Mjg2MmJkNDZjOGRjNDZlNDU0MGM4YmI3NWRkNjQ2OTg2MzZm";
+  const baseUrl = process.env.URBRANDS_WC_URL?.trim();
+  const authHeader = process.env.URBRANDS_WC_AUTH?.trim();
+
+  if (!baseUrl) {
+    throw new Error(
+      "URBRANDS_WC_URL no está configurada en las variables de entorno de Convex"
+    );
+  }
+  if (!authHeader) {
+    throw new Error(
+      "URBRANDS_WC_AUTH no está configurada en las variables de entorno de Convex"
+    );
+  }
+
   return { baseUrl: baseUrl.replace(/\/+$/, ""), authHeader };
 }
 

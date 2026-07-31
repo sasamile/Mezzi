@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "seed:superadmin": "npx convex run auth:upsertSuperadmin '{\"email\":\"admin@mezzi.com\",\"password\":\"admin\",\"name\":\"Mezzi Admin\"}'",
+    "seed:superadmin": "npx convex run auth:upsertSuperadmin \"{\\\"email\\\":\\\"$SEED_EMAIL\\\",\\\"password\\\":\\\"$SEED_PASSWORD\\\",\\\"name\\\":\\\"$SEED_NAME\\\"}\"",
     "seed:urbrands": "npx convex run tenants:seedUrbrands",
     "seed:urbrands:prompt": "npx convex run urbrands:seedUrbrandsPrompt",
     "seed:alcarbon:pqr-routing": "npx convex run tenants:ensureAlcarbonPqrRouting"

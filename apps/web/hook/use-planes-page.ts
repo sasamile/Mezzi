@@ -24,7 +24,10 @@ export function usePlanesPage() {
   const actorUserId = user?._id as Id<"users"> | undefined;
   const plans = useQuery(api.plans.list);
   const tenants = useQuery(api.tenants.listWithPlans);
-  const stats = useQuery(api.superadmin.getStats);
+  const stats = useQuery(
+    api.superadmin.getStats,
+    actorUserId ? { actorUserId } : "skip"
+  );
   const createPlan = useMutation(api.plans.create);
   const updatePlan = useMutation(api.plans.update);
   const removePlan = useMutation(api.plans.remove);

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex";
+import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { UserPlus, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +18,13 @@ import {
 } from "@/components/ui/dialog";
 
 export default function UsuariosSuperadminPage() {
-  const users = useQuery(api.superadmin.listSuperadminUsers);
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
+
+  const users = useQuery(
+    api.superadmin.listSuperadminUsers,
+    actorUserId ? { actorUserId } : "skip"
+  );
   const registerSuperadmin = useMutation(api.auth.registerSuperadmin);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -39,10 +47,15 @@ export default function UsuariosSuperadminPage() {
       setError("La contraseña debe tener al menos 5 caracteres.");
       return;
     }
+    if (!actorUserId) {
+      setError("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
       await registerSuperadmin({
+        actorUserId,
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,

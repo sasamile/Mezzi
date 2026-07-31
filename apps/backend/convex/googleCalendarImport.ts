@@ -48,7 +48,7 @@ export const importFromGoogle = action({
       const refreshed = await refreshGoogleToken(gc.refreshToken);
       if (refreshed) {
         accessToken = refreshed.access_token;
-        await ctx.runMutation(api.googleCalendar.saveTokens, {
+        await ctx.runMutation(internal.googleCalendar.saveTokens, {
           tenantId: args.tenantId,
           accessToken: refreshed.access_token,
           expiresAt: Date.now() + refreshed.expires_in * 1000,

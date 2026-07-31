@@ -17,10 +17,16 @@ const roleValidator = v.union(
 /** Páginas por defecto para rol Talento Humano (solo vacantes). */
 export const HR_DEFAULT_ALLOWED_PAGES = ["trabajaConNosotros"] as const;
 
-/** Lista todos los usuarios (superadmin) - sin passwordHash */
+/**
+ * Lista todos los usuarios de la plataforma (panel superadmin) - sin passwordHash.
+ * Requiere superadmin: sin este guard era el pivote de la escalada de privilegios,
+ * porque entregaba anónimamente los _id y emails de todos los superadmin.
+ */
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { actorUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const users = await ctx.db.query("users").order("desc").collect();
     return users.map((u) => {
       const { passwordHash: _, ...safe } = u;
@@ -99,6 +105,7 @@ export const create = mutation({
   },
 });
 
+/** Miembros de un restaurante. Nunca devuelve el passwordHash. */
 export const listByTenant = query({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
@@ -109,7 +116,10 @@ export const listByTenant = query({
     const result = await Promise.all(
       memberships.map(async (ut) => {
         const user = await ctx.db.get(ut.userId);
-        return { ...ut, user: user ?? null };
+        if (!user) return { ...ut, user: null };
+        // Era la única query pública que devolvía el hash de contraseña.
+        const { passwordHash: _passwordHash, ...safeUser } = user;
+        return { ...ut, user: safeUser };
       })
     );
     return result;

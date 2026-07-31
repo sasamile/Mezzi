@@ -2,6 +2,8 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex";
+import type { Id } from "@/convex";
+import { useAuth } from "@/lib/auth-context";
 import { Building2, BadgeDollarSign } from "lucide-react";
 import { DashboardHeader } from "@/components/(admin)/dashboard/DashboardHeader";
 import { DashboardMetricCards } from "@/components/(admin)/dashboard/DashboardMetricCards";
@@ -10,9 +12,21 @@ import { QuickAccessCards } from "@/components/(admin)/dashboard/QuickAccessCard
 import { RecentActivity } from "@/components/(admin)/dashboard/RecentActivity";
 
 export default function SuperadminDashboardPage() {
-  const stats = useQuery(api.superadmin.getStats);
-  const revenueHistory = useQuery(api.superadmin.getRevenueHistory, { months: 6 });
-  const activity = useQuery(api.superadmin.getRecentActivity, { limit: 8 });
+  const { user } = useAuth();
+  const actorUserId = user?._id as Id<"users"> | undefined;
+
+  const stats = useQuery(
+    api.superadmin.getStats,
+    actorUserId ? { actorUserId } : "skip"
+  );
+  const revenueHistory = useQuery(
+    api.superadmin.getRevenueHistory,
+    actorUserId ? { actorUserId, months: 6 } : "skip"
+  );
+  const activity = useQuery(
+    api.superadmin.getRecentActivity,
+    actorUserId ? { actorUserId, limit: 8 } : "skip"
+  );
 
   const quickAccessCards = [
     {

@@ -1225,7 +1225,7 @@ export const sendWhatsAppToPhone = internalAction({
     content: v.string(),
   },
   handler: async (ctx, args) => {
-    const integration = await ctx.runQuery(api.integrations.getYCloudForSend, {
+    const integration = await ctx.runQuery(internal.integrations.getYCloudForSend, {
       tenantId: args.tenantId,
     });
     if (!integration) {

@@ -65,6 +65,7 @@ import type * as system_alcarbon from "../system/alcarbon.js";
 import type * as system_conversations from "../system/conversations.js";
 import type * as system_googleCalendarSync from "../system/googleCalendarSync.js";
 import type * as system_orders from "../system/orders.js";
+import type * as system_persistMedia from "../system/persistMedia.js";
 import type * as system_urbrands from "../system/urbrands.js";
 import type * as system_ycloud from "../system/ycloud.js";
 import type * as tables from "../tables.js";
@@ -138,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   "system/conversations": typeof system_conversations;
   "system/googleCalendarSync": typeof system_googleCalendarSync;
   "system/orders": typeof system_orders;
+  "system/persistMedia": typeof system_persistMedia;
   "system/urbrands": typeof system_urbrands;
   "system/ycloud": typeof system_ycloud;
   tables: typeof tables;

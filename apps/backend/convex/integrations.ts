@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { assertTenantOwner } from "./lib/tenantAccess";
 
@@ -68,8 +68,12 @@ export const saveYCloud = mutation({
   },
 });
 
-/** Usado internamente por la action sendWhatsAppMessage (no exponer apiKey al cliente). */
-export const getYCloudForSend = query({
+/**
+ * Devuelve la API Key de YCloud. INTERNA: solo la usan las actions de envío.
+ * Como `query` pública exponía la credencial de WhatsApp Business de cualquier
+ * restaurante a quien conociera su tenantId.
+ */
+export const getYCloudForSend = internalQuery({
   args: { tenantId: v.id("tenants") },
   handler: async (ctx, args) => {
     const row = await ctx.db

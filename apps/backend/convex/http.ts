@@ -276,7 +276,7 @@ const googleCalendarCallback = httpAction(async (ctx, request) => {
     return Response.redirect(redirectError);
   }
 
-  await ctx.runMutation(api.googleCalendar.saveTokens, {
+  await ctx.runMutation(internal.googleCalendar.saveTokens, {
     tenantId,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,

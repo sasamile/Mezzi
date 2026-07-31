@@ -1,5 +1,11 @@
-import { mutation, query } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { v } from "convex/values";
+import { assertSuperadmin } from "./lib/tenantAccess";
 
 function normalizeHost(value?: string): string | null {
   if (!value) return null;
@@ -66,18 +72,24 @@ async function verifyPassword(
 }
 
 /**
- * Registra un usuario superadmin con email y contraseña.
- * Ejecutar una vez desde el dashboard de Convex:
- * Functions → auth.registerSuperadmin → Run con:
- * { "email": "nspes2020@gmail.com", "password": "Sa722413", "name": "Superadmin" }
+ * Registra un usuario superadmin. Solo un superadmin puede invocarla.
+ *
+ * NOTA DE SEGURIDAD (medida interina): `actorUserId` viaja como argumento del
+ * cliente, así que este guard es falsificable por quien ya conozca el _id de un
+ * superadmin. Es un mitigante, no un control definitivo: se reemplaza en la
+ * Fase 1 por `requireUser(token)` derivado de una sesión real en el servidor.
+ * El primer superadmin se crea con `internal.auth.upsertSuperadmin` desde la CLI.
  */
 export const registerSuperadmin = mutation({
   args: {
+    actorUserId: v.id("users"),
     email: v.string(),
     password: v.string(),
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const existing = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))
@@ -103,11 +115,12 @@ export const registerSuperadmin = mutation({
 });
 
 /**
- * Crea o actualiza un usuario superadmin con email y contrasena.
- * Uso por CLI:
- * `npx convex run auth:upsertSuperadmin '{"email":"admin@mezzi.com","password":"admin","name":"Mezzi Admin"}'`
+ * Crea o actualiza un usuario superadmin. FUNCIÓN INTERNA: no es invocable desde
+ * el cliente. Se ejecuta solo por CLI, que se autentica con una admin key:
+ * `npx convex run auth:upsertSuperadmin '{"email":"...","password":"...","name":"..."}'`
+ * Nunca escribas credenciales reales aquí ni en los scripts de package.json.
  */
-export const upsertSuperadmin = mutation({
+export const upsertSuperadmin = internalMutation({
   args: {
     email: v.string(),
     password: v.string(),
@@ -144,7 +157,12 @@ export const upsertSuperadmin = mutation({
   },
 });
 
-export const getByEmail = query({
+/**
+ * Búsqueda de usuario por email. INTERNA: como query pública era un oráculo de
+ * enumeración de cuentas (permitía confirmar qué emails existen en la plataforma).
+ * No tenía ningún llamador en el frontend.
+ */
+export const getByEmail = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, args) => {
     const user = await ctx.db

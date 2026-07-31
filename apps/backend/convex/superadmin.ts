@@ -1,10 +1,13 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertSuperadmin } from "./lib/tenantAccess";
 
 /** Estadísticas para el dashboard superadmin */
 export const getStats = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { actorUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const tenants = await ctx.db.query("tenants").collect();
     const plans = await ctx.db.query("plans").collect();
     const users = await ctx.db.query("users").collect();
@@ -36,8 +39,10 @@ export const getStats = query({
 
 /** Historial de ingresos mensuales (últimos meses). Si no hay datos históricos, simula tendencia desde MRR actual. */
 export const getRevenueHistory = query({
-  args: { months: v.optional(v.number()) },
+  args: { actorUserId: v.id("users"), months: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const months = args.months ?? 6;
     const tenants = await ctx.db.query("tenants").collect();
     const plans = await ctx.db.query("plans").collect();
@@ -64,8 +69,10 @@ export const getRevenueHistory = query({
 
 /** Actividad reciente: nuevos restaurantes, admins agregados, conversaciones. */
 export const getRecentActivity = query({
-  args: { limit: v.optional(v.number()) },
+  args: { actorUserId: v.id("users"), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const limit = args.limit ?? 8;
     const activities: { type: string; title: string; timestamp: number; extra?: string }[] = [];
 
@@ -114,8 +121,10 @@ export const getRecentActivity = query({
 
 /** Lista usuarios superadmin (sin passwordHash) */
 export const listSuperadminUsers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { actorUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    await assertSuperadmin(ctx, args.actorUserId);
+
     const users = await ctx.db
       .query("users")
       .filter((q) => q.eq(q.field("isSuperadmin"), true))

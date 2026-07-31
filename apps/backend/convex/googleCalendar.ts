@@ -1,4 +1,9 @@
-import { mutation, query, internalQuery } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalQuery,
+  internalMutation,
+} from "./_generated/server";
 import { v } from "convex/values";
 import { assertTenantOwner } from "./lib/tenantAccess";
 
@@ -30,7 +35,13 @@ export const getForSync = internalQuery({
   },
 });
 
-export const saveTokens = mutation({
+/**
+ * Guarda los tokens OAuth de Google. INTERNA: solo la invocan el callback de
+ * OAuth y el refresco de token. Como `mutation` pública permitía a un anónimo
+ * sustituir los tokens de cualquier restaurante y desviar sus reservas
+ * —con nombre, teléfono y email del cliente— a un calendario ajeno.
+ */
+export const saveTokens = internalMutation({
   args: {
     tenantId: v.id("tenants"),
     accessToken: v.string(),

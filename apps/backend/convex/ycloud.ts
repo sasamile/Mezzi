@@ -37,7 +37,7 @@ export const sendWhatsAppMessage = action({
     }
 
     const integration = await ctx.runQuery(
-      api.integrations.getYCloudForSend,
+      internal.integrations.getYCloudForSend,
       { tenantId: args.tenantId }
     );
     if (!integration) {
@@ -150,7 +150,7 @@ export const sendWhatsAppMedia = action({
   },
   handler: async (ctx, args) => {
     const integration = await ctx.runQuery(
-      api.integrations.getYCloudForSend,
+      internal.integrations.getYCloudForSend,
       { tenantId: args.tenantId }
     );
     if (!integration) {
