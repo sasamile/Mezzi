@@ -338,7 +338,7 @@ export async function applyOpenClawSideEffect(
         };
         const resolved = PRIORITY_MAP[raw] ?? "high";
         try {
-          await ctx.runMutation(api.conversations.updatePriority, {
+          await ctx.runMutation(internal.conversations.updatePriorityInternal, {
             conversationId,
             priority: resolved,
           });

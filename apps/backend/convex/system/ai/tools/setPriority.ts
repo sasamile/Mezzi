@@ -30,7 +30,7 @@ export const setPriority = createTool({
     );
     if (!conv) return "Conversación no encontrada";
 
-    await ctx.runMutation(api.conversations.updatePriority, {
+    await ctx.runMutation(internal.conversations.updatePriorityInternal, {
       conversationId: conv._id,
       priority: args.priority,
     });

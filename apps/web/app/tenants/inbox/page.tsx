@@ -91,7 +91,7 @@ function formatDateDivider(ts: number): string {
 
 export default function InboxPage() {
   const { tenantId } = useTenant();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [selectedConversationId, setSelectedConversationId] = useState<
     Id<"conversations"> | null
   >(null);
@@ -159,9 +159,7 @@ export default function InboxPage() {
     loadMore: loadMoreConversations,
   } = usePaginatedQuery(
     api.conversations.listByTenantPaginated,
-    tenantId
-      ? { tenantId, userId: (user?._id as Id<"users">) ?? undefined }
-      : "skip",
+    tenantId && token ? { token, tenantId } : "skip",
     { initialNumItems: PAGE_SIZE }
   );
   const conversationsLoading = conversationsStatus === "LoadingFirstPage";
@@ -180,14 +178,15 @@ export default function InboxPage() {
   );
   const recentMessagesPage = useQuery(
     api.messages.listRecentByConversation,
-    selectedConversationId
-      ? { conversationId: selectedConversationId, limit: MESSAGE_PAGE_SIZE }
+    selectedConversationId && token
+      ? { token, conversationId: selectedConversationId, limit: MESSAGE_PAGE_SIZE }
       : "skip"
   );
   const olderMessagesPage = useQuery(
     api.messages.listRecentByConversation,
-    selectedConversationId && olderCursor != null
+    selectedConversationId && olderCursor != null && token
       ? {
+          token,
           conversationId: selectedConversationId,
           limit: MESSAGE_PAGE_SIZE,
           before: olderCursor,
@@ -196,8 +195,8 @@ export default function InboxPage() {
   );
   const selectedConversationDoc = useQuery(
     api.conversations.get,
-    selectedConversationId
-      ? { conversationId: selectedConversationId }
+    selectedConversationId && token
+      ? { token, conversationId: selectedConversationId }
       : "skip"
   );
   const members = useQuery(
@@ -206,16 +205,36 @@ export default function InboxPage() {
   );
   const needingAttention = useQuery(
     api.conversations.countNeedingAttention,
-    tenantId ? { tenantId } : "skip"
+    tenantId && token ? { token, tenantId } : "skip"
   );
   const sendMessage = useAction(api.ycloud.sendWhatsAppMessage);
   const sendMedia = useAction(api.ycloud.sendWhatsAppMedia);
   const retryBotResponse = useAction(api.ycloud.retryBotResponse);
   const improveMessage = useAction(api.improveMessage.improve);
   const generateUploadUrl = useMutation(api.ycloud.generateMediaUploadUrl);
-  const updatePriority = useMutation(api.conversations.updatePriority);
-  const updateAssignedTo = useMutation(api.conversations.updateAssignedTo);
-  const updateStatus = useMutation(api.conversations.updateStatus);
+  const updatePriorityFn = useMutation(api.conversations.updatePriority);
+  const updateAssignedToFn = useMutation(api.conversations.updateAssignedTo);
+  const updateStatusFn = useMutation(api.conversations.updateStatus);
+
+  /**
+   * Estas tres mutations ahora exigen el token de sesión. Se envuelven aquí
+   * para inyectarlo una sola vez en lugar de repetirlo en cada uno de los ocho
+   * puntos de llamada, y para fallar con un mensaje claro si la sesión caducó
+   * mientras la pestaña estaba abierta.
+   */
+  const requireToken = (): string => {
+    if (!token) throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+    return token;
+  };
+  const updatePriority = (
+    args: Omit<Parameters<typeof updatePriorityFn>[0], "token">
+  ) => updatePriorityFn({ ...args, token: requireToken() });
+  const updateAssignedTo = (
+    args: Omit<Parameters<typeof updateAssignedToFn>[0], "token">
+  ) => updateAssignedToFn({ ...args, token: requireToken() });
+  const updateStatus = (
+    args: Omit<Parameters<typeof updateStatusFn>[0], "token">
+  ) => updateStatusFn({ ...args, token: requireToken() });
   const toggleConversationFolder = useMutation(
     api.conversationFolders.toggleConversationFolder
   );

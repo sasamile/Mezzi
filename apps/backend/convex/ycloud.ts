@@ -47,7 +47,7 @@ export const sendWhatsAppMessage = action({
     }
 
     const conversation = await ctx.runQuery(
-      api.conversations.get,
+      internal.conversations.getInternal,
       { conversationId: args.conversationId }
     );
     if (!conversation || conversation.tenantId !== args.tenantId) {
@@ -82,7 +82,7 @@ export const sendWhatsAppMessage = action({
       throw new Error(`Error YCloud: ${errMsg}`);
     }
 
-    await ctx.runMutation(api.messages.add, {
+    await ctx.runMutation(internal.messages.addInternal, {
       conversationId: args.conversationId,
       tenantId: args.tenantId,
       direction: "OUTBOUND",
@@ -160,7 +160,7 @@ export const sendWhatsAppMedia = action({
     }
 
     const conversation = await ctx.runQuery(
-      api.conversations.get,
+      internal.conversations.getInternal,
       { conversationId: args.conversationId }
     );
     if (!conversation || conversation.tenantId !== args.tenantId) {
@@ -219,7 +219,7 @@ export const sendWhatsAppMedia = action({
       throw new Error(`Error YCloud: ${errMsg}`);
     }
 
-    await ctx.runMutation(api.messages.add, {
+    await ctx.runMutation(internal.messages.addInternal, {
       conversationId: args.conversationId,
       tenantId: args.tenantId,
       direction: "OUTBOUND",
@@ -243,7 +243,7 @@ export const retryBotResponse = action({
     conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
-    const conversation = await ctx.runQuery(api.conversations.get, {
+    const conversation = await ctx.runQuery(internal.conversations.getInternal, {
       conversationId: args.conversationId,
     });
     if (!conversation || conversation.tenantId !== args.tenantId) {

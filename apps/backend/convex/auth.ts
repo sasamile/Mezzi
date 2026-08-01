@@ -4,7 +4,7 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { assertSuperadmin } from "./lib/tenantAccess";
 import {
@@ -102,7 +102,7 @@ export const registerSuperadmin = mutation({
       .first();
 
     if (existing) {
-      throw new Error("Ya existe un usuario con ese email");
+      throw new ConvexError("Ya existe un usuario con ese email");
     }
 
     const salt = randomSalt();
@@ -201,12 +201,12 @@ export const login = mutation({
       .first();
 
     if (!user || !user.passwordHash) {
-      throw new Error("Credenciales inválidas");
+      throw new ConvexError("Credenciales inválidas");
     }
 
     const valid = await verifyPassword(args.password, user.passwordHash);
     if (!valid) {
-      throw new Error("Credenciales inválidas");
+      throw new ConvexError("Credenciales inválidas");
     }
 
     const host = normalizeHost(args.host);
@@ -225,7 +225,7 @@ export const login = mutation({
             )
             .unique();
           if (!membership) {
-            throw new Error("No tienes acceso a este dominio");
+            throw new ConvexError("No tienes acceso a este dominio");
           }
         }
         forcedTenantId = scopedTenant._id;

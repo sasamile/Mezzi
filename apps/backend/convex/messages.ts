@@ -1,14 +1,25 @@
-import { internalQuery, mutation, query } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { requireConversationAccess } from "./lib/session";
 
 /** @deprecated Prefer listRecentByConversation — evita cargar hilos enteros. */
 export const listByConversation = query({
   args: {
+    token: v.string(),
     conversationId: v.id("conversations"),
     /** Si se pasa, solo los N más recientes (orden cronológico). */
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireConversationAccess(ctx, args.token, args.conversationId);
+
     const limit = args.limit;
     if (limit != null) {
       const capped = Math.min(Math.max(limit, 1), 200);
@@ -37,12 +48,15 @@ export const listByConversation = query({
  */
 export const listRecentByConversation = query({
   args: {
+    token: v.string(),
     conversationId: v.id("conversations"),
     limit: v.optional(v.number()),
     /** createdAt del mensaje más antiguo ya cargado */
     before: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireConversationAccess(ctx, args.token, args.conversationId);
+
     const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
     const before = args.before;
 
@@ -70,18 +84,37 @@ export const listRecentByConversation = query({
   },
 });
 
-export const add = mutation({
-  args: {
-    conversationId: v.id("conversations"),
-    tenantId: v.id("tenants"),
-    direction: v.union(v.literal("INBOUND"), v.literal("OUTBOUND")),
-    content: v.string(),
-    mediaUrl: v.optional(v.string()),
-    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))),
-    providerMessageId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
+const addArgs = {
+  conversationId: v.id("conversations"),
+  tenantId: v.id("tenants"),
+  direction: v.union(v.literal("INBOUND"), v.literal("OUTBOUND")),
+  content: v.string(),
+  mediaUrl: v.optional(v.string()),
+  mediaType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))),
+  providerMessageId: v.optional(v.string()),
+};
+
+type AddMessageInput = {
+  conversationId: Id<"conversations">;
+  tenantId: Id<"tenants">;
+  direction: "INBOUND" | "OUTBOUND";
+  content: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video" | "audio" | "document";
+  providerMessageId?: string;
+};
+
+/**
+ * Lógica compartida. Es una función normal, no un `ctx.runMutation` sobre la
+ * versión interna: llamar a una función del propio módulo por el objeto
+ * `internal` crea una referencia circular de tipos que TypeScript no puede
+ * resolver, además de una llamada extra innecesaria.
+ */
+async function insertMessage(
+  ctx: MutationCtx,
+  args: AddMessageInput
+): Promise<Id<"messages">> {
+  const now = Date.now();
     const preview =
       args.mediaType === "image"
         ? "Imagen"
@@ -109,7 +142,48 @@ export const add = mutation({
       providerMessageId: args.providerMessageId,
       createdAt: now,
     });
+}
+
+/**
+ * Puerta pública: un agente escribiendo desde el inbox. Exige sesión con acceso
+ * al restaurante de la conversación.
+ */
+export const add = mutation({
+  args: {
+    token: v.string(),
+    ...addArgs,
   },
+  handler: async (ctx, args) => {
+    const { conversation } = await requireConversationAccess(
+      ctx,
+      args.token,
+      args.conversationId
+    );
+    // El tenantId llega del cliente y se guarda en la fila: si no coincide con
+    // el de la conversación, el mensaje quedaría contabilizado en otro tenant.
+    if (conversation.tenantId !== args.tenantId) {
+      throw new Error("El mensaje no corresponde a este restaurante");
+    }
+
+    return await insertMessage(ctx, {
+      conversationId: args.conversationId,
+      tenantId: args.tenantId,
+      direction: args.direction,
+      content: args.content,
+      mediaUrl: args.mediaUrl,
+      mediaType: args.mediaType,
+      providerMessageId: args.providerMessageId,
+    });
+  },
+});
+
+/**
+ * Sin sesión. La invocan el webhook de YCloud y las acciones del bot, donde
+ * quien escribe es un cliente de WhatsApp que no tiene cuenta en la plataforma.
+ */
+export const addInternal = internalMutation({
+  args: addArgs,
+  handler: async (ctx, args) => await insertMessage(ctx, args),
 });
 
 /**
@@ -238,7 +312,12 @@ function buildPreview(msg: { content: string; mediaType?: string }) {
   return t.slice(0, 50) + (t.length > 50 ? "…" : "");
 }
 
-export const backfillLastMessagePreviews = mutation({
+/**
+ * Mantenimiento puntual. INTERNA: como mutación pública, cualquiera podía
+ * dispararla y provocar una reescritura de TODAS las conversaciones de TODOS
+ * los restaurantes de una sola llamada.
+ */
+export const backfillLastMessagePreviews = internalMutation({
   args: {},
   handler: async (ctx) => {
     const conversations = await ctx.db.query("conversations").collect();

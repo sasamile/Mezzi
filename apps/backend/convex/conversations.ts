@@ -1,8 +1,17 @@
-import { mutation, query } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import {
+  requireConversationAccess,
+  requireTenantMember,
+} from "./lib/session";
 
 /** Sentinel de acceso a chats sin clasificar (ver conversationFolders.UNCLASSIFIED). */
 const UNCLASSIFIED = "__unclassified__";
@@ -57,22 +66,32 @@ const priorityValidator = v.union(
   v.literal("urgent")
 );
 
+/**
+ * Conversaciones del restaurante, filtradas por los permisos de carpeta del
+ * usuario de la sesión.
+ *
+ * `userId` deja de ser argumento. Como opcional era doblemente inseguro:
+ * cualquiera podía omitirlo para saltarse el filtro de carpetas
+ * (`filterByFolderAccess` devuelve todo si no recibe userId), o pasar el de
+ * otra persona. Ahora sale del token.
+ */
 export const listByTenant = query({
   args: {
+    token: v.string(),
     tenantId: v.id("tenants"),
-    /** Si se pasa, filtra según los permisos de carpeta del usuario. */
-    userId: v.optional(v.id("users")),
     /** Límite duro (default 80). Evita full-scan del tenant. */
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const { user } = await requireTenantMember(ctx, args.token, args.tenantId);
+
     const limit = Math.min(Math.max(args.limit ?? 80, 1), 150);
     const batch = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_last_message", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
       .take(limit);
-    return await filterByFolderAccess(ctx, args.tenantId, args.userId, batch);
+    return await filterByFolderAccess(ctx, args.tenantId, user._id, batch);
   },
 });
 
@@ -82,11 +101,13 @@ export const listByTenant = query({
  */
 export const listByTenantPaginated = query({
   args: {
+    token: v.string(),
     tenantId: v.id("tenants"),
-    userId: v.optional(v.id("users")),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
+    const { user } = await requireTenantMember(ctx, args.token, args.tenantId);
+
     const result = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_last_message", (q) =>
@@ -98,7 +119,7 @@ export const listByTenantPaginated = query({
     const page = await filterByFolderAccess(
       ctx,
       args.tenantId,
-      args.userId,
+      user._id,
       result.page
     );
 
@@ -111,10 +132,12 @@ export const listByTenantPaginated = query({
 
 export const countNeedingAttention = query({
   args: {
+    token: v.string(),
     tenantId: v.id("tenants"),
-    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
+    const { user } = await requireTenantMember(ctx, args.token, args.tenantId);
+
     const pending = await ctx.db
       .query("conversations")
       .withIndex("by_tenant_status", (q) =>
@@ -124,21 +147,43 @@ export const countNeedingAttention = query({
     const visible = await filterByFolderAccess(
       ctx,
       args.tenantId,
-      args.userId,
+      user._id,
       pending
     );
     return visible.length;
   },
 });
 
-export const get = query({
+/** Lectura interna, sin sesión: la usan el webhook y las acciones del bot. */
+export const getInternal = internalQuery({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.conversationId);
   },
 });
 
-export const getOrCreate = mutation({
+/** Puerta pública: exige sesión con acceso al restaurante de la conversación. */
+export const get = query({
+  args: {
+    token: v.string(),
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const { conversation } = await requireConversationAccess(
+      ctx,
+      args.token,
+      args.conversationId
+    );
+    return conversation;
+  },
+});
+
+/**
+ * INTERNA: no tenía ningún llamador —el bot usa
+ * `internal.system.conversations.getOrCreateForAgent`— y como mutación pública
+ * permitía a cualquiera crear conversaciones falsas en cualquier restaurante.
+ */
+export const getOrCreate = internalMutation({
   args: {
     tenantId: v.id("tenants"),
     externalContactId: v.string(),
@@ -178,17 +223,21 @@ export const getOrCreate = mutation({
 
 export const updateStatus = mutation({
   args: {
+    token: v.string(),
     conversationId: v.id("conversations"),
     status: statusValidator,
   },
   handler: async (ctx, args) => {
+    await requireConversationAccess(ctx, args.token, args.conversationId);
+
     const now = Date.now();
     await ctx.db.patch(args.conversationId, { status: args.status, updatedAt: now });
     return args.conversationId;
   },
 });
 
-export const updatePriority = mutation({
+/** Interna: el bot marca prioridad al detectar urgencia, sin usuario detrás. */
+export const updatePriorityInternal = internalMutation({
   args: {
     conversationId: v.id("conversations"),
     priority: v.union(priorityValidator, v.null()),
@@ -203,12 +252,51 @@ export const updatePriority = mutation({
   },
 });
 
+export const updatePriority = mutation({
+  args: {
+    token: v.string(),
+    conversationId: v.id("conversations"),
+    priority: v.union(priorityValidator, v.null()),
+  },
+  handler: async (ctx, args) => {
+    await requireConversationAccess(ctx, args.token, args.conversationId);
+
+    const now = Date.now();
+    await ctx.db.patch(args.conversationId, {
+      priority: args.priority ?? undefined,
+      updatedAt: now,
+    });
+    return args.conversationId;
+  },
+});
+
 export const updateAssignedTo = mutation({
   args: {
+    token: v.string(),
     conversationId: v.id("conversations"),
     userId: v.union(v.id("users"), v.null()),
   },
   handler: async (ctx, args) => {
+    const { conversation } = await requireConversationAccess(
+      ctx,
+      args.token,
+      args.conversationId
+    );
+
+    // El asignado debe pertenecer al mismo restaurante: si no, se podría
+    // "asignar" un chat a alguien de otro tenant y filtrarle el acceso.
+    if (args.userId) {
+      const membership = await ctx.db
+        .query("userTenants")
+        .withIndex("by_user_tenant", (q) =>
+          q.eq("userId", args.userId!).eq("tenantId", conversation.tenantId)
+        )
+        .unique();
+      if (!membership) {
+        throw new Error("El usuario no pertenece a este restaurante");
+      }
+    }
+
     const now = Date.now();
     await ctx.db.patch(args.conversationId, {
       assignedTo: args.userId ?? undefined,

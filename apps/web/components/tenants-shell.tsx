@@ -316,7 +316,7 @@ function NavUserFooter({
 export function TenantsShell({ children }: TenantsShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const { tenantId } = useTenant();
 
   const tenant = useQuery(api.tenants.get, tenantId ? { tenantId } : "skip");
@@ -326,9 +326,7 @@ export function TenantsShell({ children }: TenantsShellProps) {
   );
   const needingAttention = useQuery(
     api.conversations.countNeedingAttention,
-    tenantId && ycloud?.connected
-      ? { tenantId, userId: (user?._id as Id<"users">) ?? undefined }
-      : "skip"
+    tenantId && token && ycloud?.connected ? { token, tenantId } : "skip"
   );
   const membership = useQuery(
     api.users.getMembershipByTenantAndUser,

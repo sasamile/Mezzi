@@ -177,7 +177,7 @@ export const processInboundMessage = internalAction({
         }
       }
 
-      await ctx.runMutation(api.messages.add, {
+      await ctx.runMutation(internal.messages.addInternal, {
         conversationId,
         tenantId: args.tenantId,
         direction: "INBOUND",

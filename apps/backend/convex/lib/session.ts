@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -61,7 +62,7 @@ export async function requireUser(
 ): Promise<Doc<"users">> {
   const user = await getUser(ctx, token);
   if (!user) {
-    throw new Error("Sesión inválida o expirada. Vuelve a iniciar sesión.");
+    throw new ConvexError("Sesión inválida o expirada. Vuelve a iniciar sesión.");
   }
   return user;
 }
@@ -73,7 +74,7 @@ export async function requireSuperadmin(
 ): Promise<Doc<"users">> {
   const user = await requireUser(ctx, token);
   if (!user.isSuperadmin) {
-    throw new Error("Solo un superadmin puede realizar esta acción");
+    throw new ConvexError("Solo un superadmin puede realizar esta acción");
   }
   return user;
 }
@@ -98,7 +99,7 @@ export async function requireTenantMember(
     .unique();
 
   if (!membership) {
-    throw new Error("No tienes acceso a este restaurante");
+    throw new ConvexError("No tienes acceso a este restaurante");
   }
   return { user, membership };
 }
@@ -113,11 +114,37 @@ export async function requireTenantOwner(
   if (user.isSuperadmin) return { user, membership };
 
   if (membership?.role !== "OWNER") {
-    throw new Error(
+    throw new ConvexError(
       "Solo el propietario del restaurante puede realizar esta acción"
     );
   }
   return { user, membership };
+}
+
+/**
+ * Acceso a una conversación concreta. Muchas funciones reciben `conversationId`
+ * y no `tenantId`: hay que cargar la conversación para saber a qué restaurante
+ * pertenece y validar la pertenencia contra ese tenant, no contra uno que el
+ * cliente indique.
+ */
+export async function requireConversationAccess(
+  ctx: Ctx,
+  token: string,
+  conversationId: Id<"conversations">
+): Promise<{
+  user: Doc<"users">;
+  conversation: Doc<"conversations">;
+  membership: Doc<"userTenants"> | null;
+}> {
+  const conversation = await ctx.db.get(conversationId);
+  if (!conversation) throw new ConvexError("Conversación no encontrada");
+
+  const { user, membership } = await requireTenantMember(
+    ctx,
+    token,
+    conversation.tenantId
+  );
+  return { user, conversation, membership };
 }
 
 /**
@@ -130,7 +157,7 @@ export async function requireTenantOwnerByMembership(
   userTenantId: Id<"userTenants">
 ): Promise<{ user: Doc<"users">; tenantId: Id<"tenants"> }> {
   const target = await ctx.db.get(userTenantId);
-  if (!target) throw new Error("Membresía no encontrada");
+  if (!target) throw new ConvexError("Membresía no encontrada");
 
   const { user } = await requireTenantOwner(ctx, token, target.tenantId);
   return { user, tenantId: target.tenantId };
