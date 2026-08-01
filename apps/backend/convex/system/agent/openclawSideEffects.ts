@@ -287,7 +287,7 @@ export async function applyOpenClawSideEffect(
         // se disculpara ante una felicitación o una simple petición.
         const resolvedType = normalizePqrType(
           typeof a.type === "string" ? a.type : undefined
-        ) ?? "complaint";
+        ) ?? "petition";
         const subject = String(a.subject ?? "").trim();
         const description = String(a.description ?? "").trim();
         if (!subject || subject.length < 5) {
