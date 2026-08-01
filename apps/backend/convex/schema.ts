@@ -166,6 +166,18 @@ export default defineSchema({
     folderIds: v.optional(v.array(v.id("conversationFolders"))),
     /** ID del job programado para responder (debounce multi-mensaje) */
     pendingJobId: v.optional(v.id("_scheduled_functions")),
+    /**
+     * Última interacción del agente humano en este chat (asignarse el chat,
+     * enviar texto o media, cambiar estado/prioridad). Referencia para decidir
+     * si el chat lleva demasiado tiempo abandonado en modo humano.
+     */
+    agentLastActivityAt: v.optional(v.number()),
+    /**
+     * Job programado que devuelve el chat al bot tras AGENT_INACTIVITY_MS sin
+     * actividad del agente. Campo aparte de `pendingJobId`: los dos ciclos se
+     * solapan y compartir el handle haría que uno cancelara el job del otro.
+     */
+    autoReleaseJobId: v.optional(v.id("_scheduled_functions")),
     lastMessageAt: v.number(),
     lastMessagePreview: v.optional(v.string()), // preview para lista tipo WhatsApp
     lastMessageDirection: v.optional(v.union(v.literal("INBOUND"), v.literal("OUTBOUND"))),

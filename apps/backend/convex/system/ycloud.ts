@@ -11,7 +11,7 @@ import { supportAgent } from "./ai/agents/supportAgent";
 import { urbrandsAgent } from "./ai/agents/urbrandsAgent";
 import { searchProducts } from "./ai/tools/searchProducts";
 import { isUrbrandsTenant } from "./urbrands";
-import { isPdfsModuleEnabled, isEmailOnlySupportTenant, emailOnlySupportPromptBlock, looksLikePqrFollowUp, pqrAlreadyRegisteredMessage, normalizePhoneForPqr } from "./alcarbon";
+import { isPdfsModuleEnabled, isEmailOnlySupportTenant, emailOnlySupportPromptBlock, emailOnlySupportGatewayLine, extractEmail, looksLikeBareEmail, looksLikePqrFollowUp, mergePqrAckSuffix, pqrAlreadyRegisteredMessage, pqrEmailAttachedMessage, normalizePhoneForPqr } from "./alcarbon";
 import { transcribeAudioFromUrl } from "./ai/transcribe";
 import { persistRemoteMediaToConvex } from "./persistMedia";
 import { saveMessage } from "@convex-dev/agent";
@@ -414,23 +414,83 @@ export const processInboundMessageBatched = internalAction({
       const hasTrabajaConNosotros = modules.trabajaConNosotros !== false;
       const hasPdfs = isPdfsModuleEnabled(tenant);
 
-      if (
-        emailOnlySupport &&
-        hasPqr &&
-        args.channel === "whatsapp"
-      ) {
+      // Interceptores de PQR. El de correo suelto NO está limitado a los
+      // tenants email-only: el acuse de `pqrConfirmationMessage` le pide el
+      // correo al cliente en TODOS los tenants con módulo PQR ("respóndeme con
+      // tu correo y lo sumo a tu ticket"), y este bloque es el único sitio del
+      // sistema que cumple esa promesa —el bot no tiene ninguna herramienta
+      // para editar una PQR ya creada—.
+      if (hasPqr && args.channel === "whatsapp") {
         const recentPqr = await ctx.runQuery(api.pqrs.getRecentOpenByPhone, {
           tenantId: args.tenantId,
           customerPhone: normalizePhoneForPqr(args.contactId),
         });
-        if (recentPqr && looksLikePqrFollowUp(clientText)) {
-          await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+
+        /** Deja en el hilo del agente lo que el cliente vio, para no desincronizarlo. */
+        const guardarTurnoEnElHilo = async (respuesta: string) => {
+          try {
+            await saveMessage(ctx, components.agent, {
+              threadId: args.threadId,
+              prompt: clientText,
+            });
+            await saveMessage(ctx, components.agent, {
+              threadId: args.threadId,
+              message: { role: "assistant", content: respuesta },
+            });
+          } catch (e) {
+            console.warn("YCloud PQR interceptor: saveMessage falló", e);
+          }
+        };
+
+        // El cliente manda su correo suelto después de que se lo pedimos.
+        // Sin esto, el texto caería al flujo normal del bot y lo más probable
+        // es que abriera un ticket duplicado: hay que engancharlo al que ya
+        // existe y reenviar la notificación con el cliente en copia.
+        const correoSuelto =
+          recentPqr && looksLikeBareEmail(clientText)
+            ? extractEmail(clientText)
+            : null;
+        if (recentPqr && correoSuelto && !recentPqr.customerEmail) {
+          const anexado = await ctx.runMutation(
+            internal.pqrs.attachCustomerEmail,
+            { pqrId: recentPqr._id, email: correoSuelto }
+          );
+          if (anexado.updated) {
+            const respuesta = pqrEmailAttachedMessage({
+              ticketNumber: recentPqr.ticketNumber ?? "—",
+              type: recentPqr.type,
+              module: recentPqr.module,
+              customerEmail: correoSuelto,
+            });
+            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
+              tenantId: args.tenantId,
+              conversationId: args.conversationId,
+              content: respuesta,
+            });
+            await guardarTurnoEnElHilo(respuesta);
+            return;
+          }
+        }
+
+        // La insistencia sí es solo del modo email-only: en los demás tenants
+        // hay agentes humanos y la conversación puede seguir su curso normal.
+        if (emailOnlySupport && recentPqr && looksLikePqrFollowUp(clientText)) {
+          const respuesta = pqrAlreadyRegisteredMessage({
+            ticketNumber: recentPqr.ticketNumber ?? "—",
+            type: recentPqr.type,
+            module: recentPqr.module,
+            customerEmail: recentPqr.customerEmail,
+            // Aquí el enganche está probado: estamos DENTRO del interceptor y
+            // `getRecentOpenByPhone` acaba de reencontrar el ticket por
+            // teléfono. Si el cliente manda ahora su correo, se anota.
+            emailFollowUpAvailable: true,
+          });
+          await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
             tenantId: args.tenantId,
             conversationId: args.conversationId,
-            content: pqrAlreadyRegisteredMessage(
-              recentPqr.ticketNumber ?? "—"
-            ),
+            content: respuesta,
           });
+          await guardarTurnoEnElHilo(respuesta);
           return;
         }
       }
@@ -753,7 +813,9 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         const modulesLine = isUrbrands
           ? "URBRANDS: tienda ropa/accesorios. Catálogo WooCommerce (search_products), entrega inmediata Villavicencio, por encargo EE.UU./Europa."
           : emailOnlySupport
-          ? `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. SOPORTE POR CORREO — sin transferencia a humano en vivo. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`
+          ? // Las reglas de trato van completas: este ramal no recibe
+            // `modulesContext`, así que es el único sitio donde el modelo las ve.
+            `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. ${emailOnlySupportGatewayLine()} Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`
           : `Módulos: ${enabledList.length ? enabledList.join(", ") : "ninguno"}. Reservas=${hasReservas}, Pedidos=${hasPedidos}, PQR=${hasPqr}, Vacantes=${hasTrabajaConNosotros}.`;
 
         const pdfsLine =
@@ -854,6 +916,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
               conversationId: args.conversationId,
               contactId: args.contactId,
               customerName: args.customerName,
+              channel: args.channel,
               hasReservas,
               hasPdfs,
             },
@@ -864,13 +927,19 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
               ? `${outbound}\n\n⚠️ ${fx.errorMessage}`
               : fx.errorMessage;
           }
-          const fxAny = fx as Record<string, unknown>;
-          if (fxAny.pqrTicket && typeof fxAny.pqrTicket === "string") {
-            const ticket = fxAny.pqrTicket as string;
-            const label = (fxAny.pqrTypeLabel as string) ?? "PQR";
-            if (!outbound.includes(ticket)) {
-              outbound += `\n\n📋 Ticket #${ticket} (${label}) registrado exitosamente. El equipo del restaurante revisará tu caso. 🙏`;
-            }
+          // El side effect puede invalidar por completo lo que escribió el
+          // modelo (pidió un asesor humano que en este tenant no existe). Ahí
+          // se DESCARTA su texto: mandar los dos deja al cliente con dos
+          // burbujas contradictorias, y la última prometiéndole una llamada.
+          if (fx.assistantMessageOverride) {
+            outbound = fx.assistantMessageOverride;
+          }
+          // Confirmación de PQR: texto centralizado en system/alcarbon.ts.
+          // `mergePqrAckSuffix` descarta los bloques que el modelo ya redactó
+          // (disculpa, agradecimiento de cierre); el guard del ticket evita
+          // repetir el número si por lo que sea ya apareció.
+          if (fx.pqrTicket && fx.pqrAckSuffix && !outbound.includes(fx.pqrTicket)) {
+            outbound = mergePqrAckSuffix(outbound, fx.pqrAckSuffix);
           }
           let toSend = outbound.trim();
           if (!toSend) {
@@ -881,7 +950,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
               "No pude generar una respuesta ahora. ¿Puedes repetir tu mensaje o escribir al restaurante? 🙏";
           }
           try {
-            await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
               tenantId: args.tenantId,
               conversationId: args.conversationId,
               content: toSend,
@@ -912,7 +981,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           }
         } else {
           try {
-            await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
               tenantId: args.tenantId,
               conversationId: args.conversationId,
               content:
@@ -1040,7 +1109,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         );
         if (args.channel === "whatsapp") {
           try {
-            await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
               tenantId: args.tenantId,
               conversationId: args.conversationId,
               content:
@@ -1093,7 +1162,7 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           const t = normalizeOutgoingText(text).trim();
           if (!t) return false;
           try {
-            await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
               tenantId: args.tenantId,
               conversationId: args.conversationId,
               content: t,

@@ -70,7 +70,7 @@ export const sendPdf = createTool({
     }
 
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMedia, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMediaInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         storageId: match.storageId,

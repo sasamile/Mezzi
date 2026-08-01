@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { supportAgent } from "./ai/agents/supportAgent";
@@ -6,6 +6,12 @@ import { saveMessage } from "@convex-dev/agent";
 import { components } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import {
+  reconcileAgentAutoRelease,
+  runAutoReleaseJob,
+  scheduleAgentAutoRelease,
+} from "../lib/agentHandoff";
+import { requireConversationAccess } from "../lib/session";
 
 async function upsertCustomer(
   ctx: MutationCtx,
@@ -75,6 +81,52 @@ export const reopen = internalMutation({
       .unique();
     if (!conv) return;
     await ctx.db.patch(conv._id, { status: "open", updatedAt: Date.now() });
+  },
+});
+
+/**
+ * Guard de las acciones públicas de envío (`ycloud.sendWhatsAppMessage` y
+ * `sendWhatsAppMedia`): valida la sesión contra el tenant REAL de la
+ * conversación —no contra el que venga en los args— y, de paso, registra la
+ * interacción del agente para reprogramar la devolución al bot.
+ *
+ * Lanza si el token no vale o si el usuario no pertenece al restaurante: quien
+ * llama NO debe tragarse el error, es lo único que autentica esos envíos.
+ */
+export const requireAgentSendAccess = internalMutation({
+  args: {
+    token: v.string(),
+    tenantId: v.id("tenants"),
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const { conversation } = await requireConversationAccess(
+      ctx,
+      args.token,
+      args.conversationId
+    );
+    if (conversation.tenantId !== args.tenantId) {
+      throw new ConvexError("La conversación no pertenece a este restaurante");
+    }
+    // En modo bot no hay temporizador que refrescar.
+    if (!conversation.assignedTo) return;
+    await scheduleAgentAutoRelease(ctx, args.conversationId);
+  },
+});
+
+/**
+ * Devuelve la conversación al bot cuando el agente lleva AGENT_INACTIVITY_MS
+ * sin interactuar. No envía nada al cliente: es un cambio interno silencioso.
+ *
+ * Capa fina: la decisión (liberar / reprogramar lo que falte / no hacer nada)
+ * vive en `decideAutoReleaseJob` y está cubierta por tests.
+ */
+export const autoReleaseToBot = internalMutation({
+  args: { conversationId: v.id("conversations") },
+  // El tipo de retorno va explícito porque el handler se referencia a sí mismo
+  // (se reprograma) y sin anotación la inferencia sería circular.
+  handler: async (ctx, args): Promise<void> => {
+    await runAutoReleaseJob(ctx, args.conversationId);
   },
 });
 
@@ -167,6 +219,13 @@ export const getOrCreateForAgent = internalMutation({
       .first();
 
     if (existing) {
+      // Antes de nada: si el chat quedó en modo humano y el agente ya no está,
+      // devolverlo al bot. Es el único punto del sistema que se ejecuta sin que
+      // el agente haga nada, así que es la última red contra chats que quedan
+      // asignados para siempre (cerrados y reabiertos, asignados sin
+      // temporizador, o asignados antes de existir el auto-retorno).
+      await reconcileAgentAutoRelease(ctx, existing._id);
+
       // Conversación cerrada y cliente vuelve a escribir → thread nuevo para evitar
       // que el agente continúe el flujo anterior con contexto contaminado.
       if (existing.status === "closed" && existing.threadId) {

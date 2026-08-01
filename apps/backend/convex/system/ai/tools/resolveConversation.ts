@@ -4,7 +4,7 @@ import { api, internal } from "../../../_generated/api";
 import { supportAgent } from "../agents/supportAgent";
 import {
   isEmailOnlySupportTenant,
-  PQR_REGISTERED_ACK_MESSAGE,
+  HUMAN_HANDOFF_UNAVAILABLE_MESSAGE,
 } from "../../alcarbon";
 
 export const escalateConversation = createTool({
@@ -30,8 +30,9 @@ export const escalateConversation = createTool({
       if (isEmailOnlySupportTenant(tenant)) {
         return (
           "NO uses escalamiento en vivo para este restaurante. " +
-          "Registra la PQR con createPQRTool si aún no está registrada. " +
-          `Mensaje al cliente: "${PQR_REGISTERED_ACK_MESSAGE}"`
+          "Registra la PQR con createPQRTool si aún no está registrada; si el " +
+          "cliente no ha dado su correo, pídeselo y no prometas ningún envío. " +
+          `Mensaje al cliente: "${HUMAN_HANDOFF_UNAVAILABLE_MESSAGE}"`
         );
       }
     }

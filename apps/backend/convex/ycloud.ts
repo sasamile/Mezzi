@@ -1,4 +1,4 @@
-import { action, mutation } from "./_generated/server";
+import { action, internalAction, mutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
@@ -11,17 +11,24 @@ function formatForWhatsApp(text: string): string {
   return out.trim();
 }
 
+/** Resultado común de las dos acciones de envío. */
+type SendResult = { ok: true; ycloudId?: string; skippedDuplicate?: boolean };
+
 /**
  * Envía un mensaje de texto a WhatsApp vía API de YCloud y lo guarda en nuestra DB.
  * Requiere API Key y número de negocio configurados en Integraciones.
+ *
+ * INTERNA a propósito: escribir en nombre del número del restaurante no puede
+ * quedar expuesto al público. El panel entra por `sendWhatsAppMessage`, que
+ * valida la sesión antes de delegar aquí; el bot la llama directamente.
  */
-export const sendWhatsAppMessage = action({
+export const sendWhatsAppMessageInternal = internalAction({
   args: {
     tenantId: v.id("tenants"),
     conversationId: v.id("conversations"),
     content: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SendResult> => {
     const contentTrimmed = formatForWhatsApp(args.content);
     if (!contentTrimmed) throw new Error("El mensaje no puede estar vacío");
 
@@ -95,6 +102,38 @@ export const sendWhatsAppMessage = action({
 });
 
 /**
+ * Envío de texto desde el panel. Exige sesión con acceso a la conversación:
+ * sin ella cualquiera podría escribirle a los clientes de otro restaurante
+ * desde su propio número de WhatsApp.
+ */
+export const sendWhatsAppMessage = action({
+  args: {
+    token: v.string(),
+    tenantId: v.id("tenants"),
+    conversationId: v.id("conversations"),
+    content: v.string(),
+  },
+  handler: async (ctx, args): Promise<SendResult> => {
+    // Valida la sesión contra el tenant real de la conversación y marca la
+    // actividad del agente. Si lanza, no se envía nada: es el guard.
+    await ctx.runMutation(
+      internal.system.conversations.requireAgentSendAccess,
+      {
+        token: args.token,
+        tenantId: args.tenantId,
+        conversationId: args.conversationId,
+      }
+    );
+
+    return await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
+      tenantId: args.tenantId,
+      conversationId: args.conversationId,
+      content: args.content,
+    });
+  },
+});
+
+/**
  * Programa el procesamiento del mensaje entrante en segundo plano.
  * El webhook retorna 200 de inmediato para evitar timeout de YCloud.
  */
@@ -136,8 +175,11 @@ export const generateMediaUploadUrl = mutation({
 /**
  * Envía imagen o audio a WhatsApp vía YCloud.
  * Requiere storageId de un archivo previamente subido con generateMediaUploadUrl.
+ *
+ * INTERNA por lo mismo que `sendWhatsAppMessageInternal`: el panel entra por
+ * `sendWhatsAppMedia`, que valida la sesión antes de delegar aquí.
  */
-export const sendWhatsAppMedia = action({
+export const sendWhatsAppMediaInternal = internalAction({
   args: {
     tenantId: v.id("tenants"),
     conversationId: v.id("conversations"),
@@ -148,7 +190,7 @@ export const sendWhatsAppMedia = action({
     contentType: v.optional(v.string()), // ej. audio/mp4, audio/ogg
     siteUrl: v.optional(v.string()), // URL base convex.site para proxy (audio)
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SendResult> => {
     const integration = await ctx.runQuery(
       internal.integrations.getYCloudForSend,
       { tenantId: args.tenantId }
@@ -234,15 +276,67 @@ export const sendWhatsAppMedia = action({
 });
 
 /**
+ * Envío de media desde el panel. Mismo guard de sesión que el envío de texto.
+ */
+export const sendWhatsAppMedia = action({
+  args: {
+    token: v.string(),
+    tenantId: v.id("tenants"),
+    conversationId: v.id("conversations"),
+    storageId: v.id("_storage"),
+    mediaType: v.union(v.literal("image"), v.literal("audio"), v.literal("document")),
+    caption: v.optional(v.string()),
+    fileName: v.optional(v.string()),
+    contentType: v.optional(v.string()),
+    siteUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<SendResult> => {
+    await ctx.runMutation(
+      internal.system.conversations.requireAgentSendAccess,
+      {
+        token: args.token,
+        tenantId: args.tenantId,
+        conversationId: args.conversationId,
+      }
+    );
+
+    return await ctx.runAction(internal.ycloud.sendWhatsAppMediaInternal, {
+      tenantId: args.tenantId,
+      conversationId: args.conversationId,
+      storageId: args.storageId,
+      mediaType: args.mediaType,
+      caption: args.caption,
+      fileName: args.fileName,
+      contentType: args.contentType,
+      siteUrl: args.siteUrl,
+    });
+  },
+});
+
+/**
  * Reprocesa el último turno del cliente con el bot (p. ej. tras fallo de OpenClaw).
  * Ignora la respuesta de error previa y envía una nueva respuesta por WhatsApp.
+ *
+ * Exige sesión por lo mismo que los envíos del panel: acaba mandándole un
+ * WhatsApp al cliente desde el número del restaurante, así que no puede quedar
+ * abierta a cualquiera con un `conversationId`.
  */
 export const retryBotResponse = action({
   args: {
+    token: v.string(),
     tenantId: v.id("tenants"),
     conversationId: v.id("conversations"),
   },
   handler: async (ctx, args) => {
+    await ctx.runMutation(
+      internal.system.conversations.requireAgentSendAccess,
+      {
+        token: args.token,
+        tenantId: args.tenantId,
+        conversationId: args.conversationId,
+      }
+    );
+
     const conversation = await ctx.runQuery(internal.conversations.getInternal, {
       conversationId: args.conversationId,
     });

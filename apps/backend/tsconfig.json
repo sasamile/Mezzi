@@ -3,5 +3,5 @@
   "compilerOptions": {
     "baseUrl": "."
   },
-  "include": ["convex/**/*.ts"]
+  "include": ["convex/**/*.ts", "tests/**/*.ts"]
 }

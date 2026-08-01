@@ -55,7 +55,7 @@ export const cancelReservation = createTool({
     const msg =
       "Listo, tu reserva quedó cancelada. Si quieres agendar otra fecha u hora, dímelo y te ayudo.";
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         content: msg,

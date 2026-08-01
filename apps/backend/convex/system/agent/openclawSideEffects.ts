@@ -3,13 +3,38 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { ActionCtx } from "../../_generated/server";
 import { supportAgent } from "../ai/agents/supportAgent";
 import {
+  canAttachPqrEmailLater,
   isEmailOnlySupportTenant,
-  PQR_REGISTERED_ACK_MESSAGE,
+  normalizePqrType,
+  pqrConfirmationSuffix,
+  pqrPhoneFromContactId,
+  pqrTypeLabel,
+  HUMAN_HANDOFF_UNAVAILABLE_MESSAGE,
 } from "../alcarbon";
 
 export type OpenClawSideEffect = {
   kind: string;
   args?: Record<string, unknown>;
+};
+
+export type OpenClawSideEffectResult = {
+  ok: boolean;
+  errorMessage?: string;
+  /**
+   * Texto que SUSTITUYE al mensaje que redactó el modelo.
+   *
+   * Existe para los side effects en los que lo que el modelo escribió ya no es
+   * cierto. El caso real: pide `escalate_to_human` en un tenant sin atención
+   * humana; su mensaje ("te comunico con un asesor, en un momento te contactan")
+   * promete algo que aquí no ocurre, así que se descarta entero y se manda en su
+   * lugar la respuesta honesta. No se envía desde aquí a propósito: devolviéndolo
+   * el envío sigue siendo uno solo y el texto entra igual al hilo del agente.
+   */
+  assistantMessageOverride?: string;
+  /** Ticket de la PQR creada en este turno (solo en create_pqr). */
+  pqrTicket?: string;
+  /** Confirmación literal a añadir al mensaje que redactó el modelo. */
+  pqrAckSuffix?: string;
 };
 
 interface TenantPdf {
@@ -20,10 +45,8 @@ interface TenantPdf {
   url: string | null;
 }
 
-function phoneFromContact(contactId: string): string | undefined {
-  const raw = contactId.replace(/^whatsapp:/i, "").trim().replace(/\s/g, "");
-  return raw || undefined;
-}
+/** Alias local del helper compartido con `createPQRTool` (system/alcarbon.ts). */
+const phoneFromContact = pqrPhoneFromContactId;
 
 function numPeople(args: Record<string, unknown>): number | undefined {
   const v =
@@ -45,11 +68,13 @@ export async function applyOpenClawSideEffect(
     conversationId: Id<"conversations">;
     contactId: string;
     customerName: string;
+    /** Canal de la conversación: decide si el enganche de correo existe. */
+    channel: string;
     hasReservas: boolean;
     hasPdfs: boolean;
   },
   effect: OpenClawSideEffect | null | undefined
-): Promise<{ ok: boolean; errorMessage?: string; toolSentWhatsApp?: boolean }> {
+): Promise<OpenClawSideEffectResult> {
   if (!effect?.kind) return { ok: true };
 
   const { threadId, tenantId, conversationId, contactId, customerName } = opts;
@@ -59,12 +84,14 @@ export async function applyOpenClawSideEffect(
       case "escalate_to_human": {
         const tenant = await ctx.runQuery(api.tenants.get, { tenantId });
         if (isEmailOnlySupportTenant(tenant)) {
-          await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
-            tenantId,
-            conversationId,
-            content: PQR_REGISTERED_ACK_MESSAGE,
-          });
-          return { ok: true, toolSentWhatsApp: true };
+          // NO se escala nada: no hay agentes en vivo, la conversación no se
+          // marca ni se asigna. Por eso el mensaje del modelo (que acaba de
+          // prometer un asesor) tiene que desaparecer, no acompañarse de otra
+          // burbuja que lo contradiga.
+          return {
+            ok: true,
+            assistantMessageOverride: HUMAN_HANDOFF_UNAVAILABLE_MESSAGE,
+          };
         }
         await ctx.runMutation(internal.system.conversations.escalate, {
           threadId,
@@ -124,7 +151,7 @@ export async function applyOpenClawSideEffect(
             errorMessage: `No encontré ese PDF. Disponibles: ${available}.`,
           };
         }
-        await ctx.runAction(api.ycloud.sendWhatsAppMedia, {
+        await ctx.runAction(internal.ycloud.sendWhatsAppMediaInternal, {
           tenantId,
           conversationId,
           storageId: match.storageId,
@@ -134,7 +161,10 @@ export async function applyOpenClawSideEffect(
             ? match.fileName
             : `${match.fileName}.pdf`,
         });
-        return { ok: true, toolSentWhatsApp: true };
+        // Aquí NO se sustituye el mensaje del modelo: el PDF va con su propio
+        // caption y el texto que lo acompaña ("aquí tienes el menú") sigue
+        // siendo cierto.
+        return { ok: true };
       }
 
       case "create_reservation": {
@@ -252,9 +282,12 @@ export async function applyOpenClawSideEffect(
 
       case "create_pqr": {
         const a = effect.args ?? {};
-        const pqrType = String(a.type ?? "complaint").trim().toLowerCase();
-        const validTypes = ["petition", "complaint", "claim", "suggestion", "compliment"];
-        const resolvedType = validTypes.includes(pqrType) ? pqrType : "complaint";
+        // Si el planner manda un tipo que no reconocemos, caemos en "petition"
+        // (neutro) y NO en "complaint": una queja mal tipada haría que el acuse
+        // se disculpara ante una felicitación o una simple petición.
+        const resolvedType = normalizePqrType(
+          typeof a.type === "string" ? a.type : undefined
+        ) ?? "complaint";
         const subject = String(a.subject ?? "").trim();
         const description = String(a.description ?? "").trim();
         if (!subject || subject.length < 5) {
@@ -291,7 +324,7 @@ export async function applyOpenClawSideEffect(
         try {
           const pqrId: Id<"pqrs"> = await ctx.runMutation(api.pqrs.create, {
             tenantId,
-            type: resolvedType as "petition" | "complaint" | "claim" | "suggestion" | "compliment",
+            type: resolvedType,
             customerName: pqrName,
             customerEmail: pqrEmail,
             customerPhone: pqrPhone,
@@ -304,20 +337,29 @@ export async function applyOpenClawSideEffect(
           });
           const pqrDoc = await ctx.runQuery(api.pqrs.get, { pqrId });
           const ticket = pqrDoc?.ticketNumber ?? String(Date.now()).slice(-6);
-          const TYPE_LABELS: Record<string, string> = {
-            petition: "Petición",
-            complaint: "Queja",
-            claim: "Reclamo",
-            suggestion: "Sugerencia",
-            compliment: "Felicitación",
-          };
-          const label = TYPE_LABELS[resolvedType] ?? resolvedType;
-          console.log("openclawSideEffects: PQR creada", { pqrId, ticket, type: resolvedType });
+          console.log("openclawSideEffects: PQR creada", {
+            pqrId,
+            ticket,
+            type: resolvedType,
+            label: pqrTypeLabel(resolvedType),
+          });
           return {
             ok: true,
             pqrTicket: ticket,
-            pqrTypeLabel: label,
-          } as { ok: true; errorMessage?: undefined; toolSentWhatsApp?: boolean; pqrTicket?: string; pqrTypeLabel?: string };
+            // Confirmación centralizada: misma redacción que el ramal supportAgent.
+            pqrAckSuffix: pqrConfirmationSuffix({
+              type: resolvedType,
+              ticketNumber: ticket,
+              module: pqrModule,
+              customerEmail: pqrEmail,
+              // Sin teléfono guardado, `getRecentOpenByPhone` no vuelve a
+              // encontrar este ticket y el acuse no puede pedir el correo.
+              emailFollowUpAvailable: canAttachPqrEmailLater({
+                channel: opts.channel,
+                customerPhone: pqrPhone,
+              }),
+            }),
+          };
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
           return {

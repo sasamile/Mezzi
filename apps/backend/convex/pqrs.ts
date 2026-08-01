@@ -1,4 +1,4 @@
-import { action, internalAction, internalQuery, mutation, query } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
@@ -164,6 +164,42 @@ export const create = mutation({
       pqrId: id,
     });
     return id;
+  },
+});
+
+/**
+ * Engancha a un ticket ya creado el correo que el cliente mandó después.
+ *
+ * Cuando se registra la PQR sin correo, la notificación sale sin el cliente en
+ * copia y no hay forma de que reciba nada. Al llegar el correo se anota y se
+ * reenvía la notificación, ahora sí con él en copia.
+ *
+ * No pisa un correo existente: si el ticket ya tenía uno, devuelve
+ * `updated: false` y quien llama sigue su curso normal.
+ */
+export const attachCustomerEmail = internalMutation({
+  args: {
+    pqrId: v.id("pqrs"),
+    email: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ updated: boolean }> => {
+    const email = args.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { updated: false };
+
+    const row = await ctx.db.get(args.pqrId);
+    if (!row) return { updated: false };
+    if (row.customerEmail?.trim()) return { updated: false };
+
+    await ctx.db.patch(args.pqrId, {
+      customerEmail: email,
+      updatedAt: Date.now(),
+    });
+    // Reenvío para que el cliente reciba la copia que antes no pudo recibir.
+    await ctx.scheduler.runAfter(0, internal.pqrs.sendPqrNotificationEmail, {
+      pqrId: args.pqrId,
+      isResend: true,
+    });
+    return { updated: true };
   },
 });
 
@@ -720,6 +756,8 @@ export const update = mutation({
     ),
     assignedTo: v.optional(v.id("users")),
     resolutionNotes: v.optional(v.string()),
+    /** Para completar a mano el correo de un ticket que se registró sin él. */
+    customerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { pqrId, ...updates } = args;
@@ -732,6 +770,9 @@ export const update = mutation({
       if (updates.status === "resolved" || updates.status === "closed") {
         clean.resolvedAt = Date.now();
       }
+    }
+    if (updates.customerEmail !== undefined) {
+      clean.customerEmail = updates.customerEmail.trim() || undefined;
     }
     if (updates.assignedTo !== undefined) clean.assignedTo = updates.assignedTo;
     if (updates.resolutionNotes !== undefined) clean.resolutionNotes = updates.resolutionNotes;

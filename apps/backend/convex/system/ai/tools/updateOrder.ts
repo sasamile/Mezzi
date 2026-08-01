@@ -55,7 +55,7 @@ export const updateOrder = createTool({
 
     const msg = `Pedido actualizado. Se agregó: ${args.notes.trim()}. ¡Gracias por avisarnos!`;
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         content: msg,

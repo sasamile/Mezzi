@@ -22,7 +22,7 @@ export const notifyOrderCreated = internalAction({
     if (!order.conversationId && !order.customerPhone?.trim()) return;
     const content = MESSAGE_RECEIVED;
     if (order.conversationId) {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: order.tenantId,
         conversationId: order.conversationId,
         content,
@@ -49,7 +49,7 @@ export const notifyOrderDispatched = internalAction({
     if (!order || order.status !== "sent") return;
     const content = MESSAGE_DISPATCHED;
     if (order.conversationId) {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: order.tenantId,
         conversationId: order.conversationId,
         content,
@@ -76,7 +76,7 @@ export const notifyOrderDelivered = internalAction({
     if (!order || order.status !== "delivered") return;
     const content = MESSAGE_DELIVERED;
     if (order.conversationId) {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: order.tenantId,
         conversationId: order.conversationId,
         content,

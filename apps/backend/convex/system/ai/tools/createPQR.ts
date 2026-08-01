@@ -3,8 +3,9 @@ import { jsonSchema } from "ai";
 import { api, internal } from "../../../_generated/api";
 import { Id } from "../../../_generated/dataModel";
 import {
-  isEmailOnlySupportTenant,
-  PQR_REGISTERED_ACK_MESSAGE,
+  canAttachPqrEmailLater,
+  pqrConfirmationMessage,
+  pqrPhoneFromContactId,
 } from "../../alcarbon";
 
 /**
@@ -93,11 +94,20 @@ export const createPQR = createTool({
       return "La descripción es muy corta. Debes preguntar al cliente 'Por favor cuéntame en detalle qué pasó' y esperar su respuesta antes de registrar la PQR.";
     }
 
+    // El teléfono NO puede quedar en blanco: `getRecentOpenByPhone` es lo único
+    // que vuelve a encontrar este ticket cuando el cliente responde con su
+    // correo (que es exactamente lo que el acuse le pide). El modelo casi nunca
+    // manda `customerPhone` —no lo tiene—, así que se completa con el contacto
+    // de la conversación, igual que hace el ramal OpenClaw.
+    const customerPhone =
+      args.customerPhone?.trim() ||
+      pqrPhoneFromContactId(conversation.externalContactId);
+
     const pqrId: Id<"pqrs"> = await ctx.runMutation(api.pqrs.create, {
       tenantId,
       type: args.type as "petition" | "complaint" | "claim" | "suggestion" | "compliment",
       customerName: args.customerName?.trim() || "Anónimo",
-      customerPhone: args.customerPhone?.trim() || undefined,
+      customerPhone,
       customerEmail: args.customerEmail?.trim() || undefined,
       customerCity: args.customerCity?.trim() || undefined,
       module: args.module?.trim() || undefined,
@@ -111,21 +121,26 @@ export const createPQR = createTool({
     const pqrDoc = await ctx.runQuery(api.pqrs.get, { pqrId });
     const ticketNumber: string = pqrDoc?.ticketNumber ?? String(Date.now()).slice(-6);
 
-    const TYPE_LABELS: Record<string, string> = {
-      petition: "Petición",
-      complaint: "Queja",
-      claim: "Reclamo",
-      suggestion: "Sugerencia",
-      compliment: "Felicitación",
-    };
-    const typeLabel: string = TYPE_LABELS[args.type] ?? args.type;
-    const emailOnly = isEmailOnlySupportTenant(tenant);
-    const msg: string = emailOnly
-      ? `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\n${PQR_REGISTERED_ACK_MESSAGE}`
-      : `✅ Tu ${typeLabel} ha sido registrada correctamente.\n\n📋 Ticket #${ticketNumber}\nAsunto: ${subject}\n\nEl equipo del restaurante revisará tu caso y se contactará contigo si es necesario.\n\nGracias por tu mensaje. 🙏`;
+    // Texto literal y centralizado (system/alcarbon.ts): se adapta al tipo de PQR
+    // —disculpa solo en quejas y reclamos—, al módulo (facturación) y a si el
+    // enganche de correo posterior existe de verdad para ESTA conversación. Esta
+    // tool corre en todos los tenants con módulo PQR y en cualquier canal, así
+    // que la disponibilidad se calcula, no se supone: sin ella el acuse pedía el
+    // correo también donde el interceptor nunca lo va a leer.
+    const msg: string = pqrConfirmationMessage({
+      type: args.type,
+      ticketNumber,
+      subject,
+      module: args.module?.trim() || undefined,
+      customerEmail: args.customerEmail?.trim() || undefined,
+      emailFollowUpAvailable: canAttachPqrEmailLater({
+        channel: conversation.channel,
+        customerPhone,
+      }),
+    });
 
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         content: msg,

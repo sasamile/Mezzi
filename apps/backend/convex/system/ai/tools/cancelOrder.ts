@@ -50,7 +50,7 @@ export const cancelOrder = createTool({
 
     const msg = "Pedido cancelado. Si cambias de opinión, escríbenos y te ayudamos.";
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         content: msg,

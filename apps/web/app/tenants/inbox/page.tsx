@@ -207,8 +207,8 @@ export default function InboxPage() {
     api.conversations.countNeedingAttention,
     tenantId && token ? { token, tenantId } : "skip"
   );
-  const sendMessage = useAction(api.ycloud.sendWhatsAppMessage);
-  const sendMedia = useAction(api.ycloud.sendWhatsAppMedia);
+  const sendMessageFn = useAction(api.ycloud.sendWhatsAppMessage);
+  const sendMediaFn = useAction(api.ycloud.sendWhatsAppMedia);
   const retryBotResponse = useAction(api.ycloud.retryBotResponse);
   const improveMessage = useAction(api.improveMessage.improve);
   const generateUploadUrl = useMutation(api.ycloud.generateMediaUploadUrl);
@@ -235,6 +235,21 @@ export default function InboxPage() {
   const updateStatus = (
     args: Omit<Parameters<typeof updateStatusFn>[0], "token">
   ) => updateStatusFn({ ...args, token: requireToken() });
+  /**
+   * Envíos desde el panel. El token es obligatorio: autentica al agente contra
+   * la conversación (el bot usa las acciones internas, no estas) y de paso
+   * reinicia el temporizador de 10 minutos que devuelve el chat al bot.
+   */
+  const sendMessage = (
+    args: Omit<Parameters<typeof sendMessageFn>[0], "token">
+  ) => sendMessageFn({ ...args, token: requireToken() });
+  const sendMedia = (
+    args: Omit<Parameters<typeof sendMediaFn>[0], "token">
+  ) => sendMediaFn({ ...args, token: requireToken() });
+  /** Reintentar con el bot también termina en un envío por WhatsApp. */
+  const retryBot = (
+    args: Omit<Parameters<typeof retryBotResponse>[0], "token">
+  ) => retryBotResponse({ ...args, token: requireToken() });
   const toggleConversationFolder = useMutation(
     api.conversationFolders.toggleConversationFolder
   );
@@ -753,7 +768,7 @@ export default function InboxPage() {
     if (!tenantId || !selectedConversationId) return;
     setRetryingBot(true);
     try {
-      await retryBotResponse({
+      await retryBot({
         tenantId,
         conversationId: selectedConversationId,
       });
@@ -827,9 +842,10 @@ export default function InboxPage() {
     setContextMenu(null);
     try {
       await updateAssignedTo({ conversationId: targetId, userId });
-      if (userId === null) {
-        await updateStatus({ conversationId: targetId, status: "open" });
-      }
+      // El chat queda abierto en los dos sentidos. Si se pasa a modo humano y
+      // se deja 'closed', ni el bot lo atiende ni aparece en la bandeja
+      // activa: se queda mudo con un agente asignado que nadie ve.
+      await updateStatus({ conversationId: targetId, status: "open" });
     } catch (e) {
       sileo.error({
         title: "No se pudo cambiar el modo",

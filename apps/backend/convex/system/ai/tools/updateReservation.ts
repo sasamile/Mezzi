@@ -126,7 +126,7 @@ export const updateReservation = createTool({
 
     const msg = `${summary}\n\nSi necesitas otro cambio, dímelo.`;
     try {
-      await ctx.runAction(api.ycloud.sendWhatsAppMessage, {
+      await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
         tenantId: conversation.tenantId,
         conversationId: conversation._id,
         content: msg,
