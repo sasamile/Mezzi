@@ -29,31 +29,36 @@ export function IntegrationCard({
   const statusConfig = {
     connected: {
       label: "Conectado",
-      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      className:
+        "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 dark:text-emerald-400",
       badge: true,
       showConnect: false,
     },
     not_connected: {
       label: "No conectado",
-      className: "bg-slate-100 text-slate-600 border-slate-200",
+      className:
+        "bg-muted text-muted-foreground border-border",
       badge: true,
       showConnect: true,
     },
     pending_config: {
       label: "Requiere configuración",
-      className: "bg-amber-50 text-amber-700 border-amber-200",
+      className:
+        "bg-amber-500/10 text-amber-700 border-amber-500/25 dark:text-amber-400",
       badge: true,
       showConnect: true,
     },
     error: {
       label: "Error de configuración",
-      className: "bg-red-50 text-red-700 border-red-200",
+      className:
+        "bg-destructive/10 text-destructive border-destructive/25",
       badge: true,
       showConnect: true,
     },
     coming_soon: {
       label: "Próximamente",
-      className: "bg-slate-100 text-slate-500 border-slate-200",
+      className:
+        "bg-muted text-muted-foreground border-border",
       badge: true,
       showConnect: false,
     },
@@ -69,23 +74,26 @@ export function IntegrationCard({
       onClick={onClick}
       disabled={showAsDisabled}
       className={cn(
-        "group relative flex w-full flex-col items-start rounded-2xl border bg-white p-6 text-left transition-all duration-300",
-        "hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        "group relative flex w-full flex-col items-start rounded-2xl border border-border bg-card p-6 text-left shadow-sm transition-all duration-300",
+        "hover:shadow-md hover:-translate-y-0.5 active:translate-y-0",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         isConnected && "border-2",
-        showAsDisabled && "cursor-not-allowed opacity-80 hover:shadow-md hover:translate-y-0"
+        showAsDisabled && "cursor-not-allowed opacity-80 hover:shadow-sm hover:translate-y-0"
       )}
       style={{
         borderColor: isConnected ? primaryColor : undefined,
         boxShadow: isConnected
-          ? `0 0 0 1px ${primaryColor}20, 0 4px 12px rgba(0,0,0,0.06)`
-          : "0 2px 8px rgba(0,0,0,0.04)",
+          ? `0 0 0 1px ${primaryColor}33`
+          : undefined,
       }}
     >
       {/* Logo: imagen o icono */}
       <div
-        className="mb-4 flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-105"
-        style={{ backgroundColor: hasImage ? "transparent" : `${integration.color}15` }}
+        className={cn(
+          "mb-4 flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-transform duration-300 group-hover:scale-105",
+          hasImage && "bg-background ring-1 ring-border"
+        )}
+        style={{ backgroundColor: hasImage ? undefined : `${integration.color}15` }}
       >
         {hasImage && integration.imageSrc ? (
           <Image
@@ -105,12 +113,12 @@ export function IntegrationCard({
       </div>
 
       {/* Nombre */}
-      <h3 className="mb-1 text-base font-semibold text-slate-900">
+      <h3 className="mb-1 text-base font-semibold text-foreground">
         {integration.name}
       </h3>
 
       {/* Descripción */}
-      <p className="mb-4 line-clamp-2 min-h-10 text-sm text-slate-500">
+      <p className="mb-4 line-clamp-2 min-h-10 text-sm text-muted-foreground">
         {integration.description}
       </p>
 
@@ -144,7 +152,9 @@ export function IntegrationCard({
         )}
 
         {showAsDisabled && (
-          <span className="text-xs text-slate-400">Disponible próximamente</span>
+          <span className="text-xs text-muted-foreground">
+            Disponible próximamente
+          </span>
         )}
       </div>
     </button>

@@ -414,12 +414,25 @@ function LoginContent() {
       </div>
 
       {useSideImage ? (
-        <aside className="relative hidden overflow-hidden bg-muted md:block" aria-hidden>
+        <aside
+          className="relative hidden overflow-hidden bg-[#0c0c0c] md:block"
+          aria-hidden
+        >
           <Image
             src={branding.sideImageSrc}
             alt={branding.sideImageAlt}
             fill
+            priority
+            sizes="50vw"
             className="object-cover object-center"
+            unoptimized={branding.sideImageSrc.startsWith("/")}
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(0,0,0,0.18) 0%, transparent 18%), linear-gradient(180deg, transparent 70%, rgba(0,0,0,0.35) 100%)",
+            }}
           />
         </aside>
       ) : (

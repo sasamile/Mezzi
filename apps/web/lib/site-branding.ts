@@ -60,7 +60,12 @@ const HOST_OVERRIDES: Record<string, HostBrandingOverride> = {
     login: {
       logoSrc: "/logos/logoalcarbo.svg",
       logoAlt: "Logo Al Carbón",
-      sidePanel: "dashed-grid",
+      brandName: "Al Carbón",
+      sidePanel: "image",
+      sideImageSrc: "/image.png",
+      sideImageAlt:
+        "Panel Al Carbón: inbox, PQRs, documentos y operación centralizados",
+      accentColor: "#dc2626",
     },
   },
   "urbrands.mezzi.app": {

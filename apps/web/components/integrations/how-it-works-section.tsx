@@ -26,11 +26,11 @@ interface HowItWorksSectionProps {
 
 export function HowItWorksSection({ primaryColor = "#dc2626" }: HowItWorksSectionProps) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50/50 p-6 sm:p-8">
-      <h2 className="mb-2 text-lg font-semibold text-slate-900">
+    <section className="rounded-2xl border border-border bg-muted/40 p-6 sm:p-8">
+      <h2 className="mb-2 text-lg font-semibold text-foreground">
         ¿Cómo funcionan las integraciones?
       </h2>
-      <p className="mb-6 text-sm text-slate-500">
+      <p className="mb-6 text-sm text-muted-foreground">
         En tres pasos simples conectas servicios externos y desbloqueas
         funcionalidades del sistema.
       </p>
@@ -41,7 +41,7 @@ export function HowItWorksSection({ primaryColor = "#dc2626" }: HowItWorksSectio
           return (
             <div
               key={i}
-              className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 transition-all duration-300 hover:shadow-md"
+              className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-all duration-300 hover:shadow-sm"
             >
               <div
                 className="mb-3 flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors"
@@ -52,13 +52,13 @@ export function HowItWorksSection({ primaryColor = "#dc2626" }: HowItWorksSectio
               >
                 <Icon className="size-5" strokeWidth={2} />
               </div>
-              <span className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <span className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Paso {i + 1}
               </span>
-              <h3 className="mb-1.5 text-sm font-semibold text-slate-900">
+              <h3 className="mb-1.5 text-sm font-semibold text-foreground">
                 {step.title}
               </h3>
-              <p className="text-sm text-slate-500">{step.description}</p>
+              <p className="text-sm text-muted-foreground">{step.description}</p>
             </div>
           );
         })}

@@ -54,8 +54,8 @@ function PdfRow({
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-red-50">
-        <FileText className="h-5 w-5 text-red-500" />
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+        <FileText className="h-5 w-5 text-destructive" />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -72,12 +72,12 @@ function PdfRow({
                   setLabelValue(pdf.label);
                 }
               }}
-              className="flex-1 rounded-lg border border-blue-300 px-2 py-1 text-sm font-medium text-foreground ring-1 ring-blue-400 outline-none"
+              className="flex-1 rounded-lg border border-ring bg-background px-2 py-1 text-sm font-medium text-foreground ring-1 ring-ring/40 outline-none"
             />
             <button
               onClick={handleRename}
               disabled={saving}
-              className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 transition-colors disabled:opacity-50"
+              className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             </button>
@@ -93,7 +93,7 @@ function PdfRow({
             <span className="font-medium text-foreground">{pdf.label}</span>
             <button
               onClick={() => setEditing(true)}
-              className="rounded p-0.5 text-slate-300 hover:text-muted-foreground transition-colors"
+              className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
@@ -117,7 +117,7 @@ function PdfRow({
         <button
           onClick={async () => { setDeleting(true); await onDelete(pdf._id); setDeleting(false); }}
           disabled={deleting}
-          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           Eliminar
@@ -217,11 +217,11 @@ export default function DocumentosPage() {
       {/* Lista de PDFs */}
       {pdfs === undefined ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : pdfs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-muted/40 px-6 py-10 text-center">
-          <FileText className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+        <div className="rounded-xl border border-dashed border-border bg-muted/40 px-6 py-10 text-center">
+          <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">Sin documentos aún</p>
           <p className="text-xs text-muted-foreground mt-1">Agrega tu primer PDF abajo.</p>
         </div>
@@ -241,13 +241,13 @@ export default function DocumentosPage() {
       {/* Zona de carga */}
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2">
-          <Plus className="h-4 w-4 text-blue-500" />
+          <Plus className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-semibold text-foreground">Agregar nuevo documento</span>
         </div>
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">
-            Nombre del documento <span className="text-red-400">*</span>
+            Nombre del documento <span className="text-destructive">*</span>
           </label>
           <input
             type="text"
@@ -255,7 +255,7 @@ export default function DocumentosPage() {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             disabled={uploading}
-            className="w-full rounded-lg border border-slate-300 bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ring-1 ring-slate-900/5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
           />
           <p className="text-xs text-muted-foreground">
             Este nombre es el que usa el bot para identificar y enviar el documento.
@@ -281,7 +281,7 @@ export default function DocumentosPage() {
             fileInputRef.current?.click();
           }}
           disabled={uploading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-muted-foreground hover:border-blue-400 hover:bg-blue-50/30 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           {uploading ? (
             <>
@@ -299,25 +299,26 @@ export default function DocumentosPage() {
 
       {/* Mensajes */}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
           ✓ {success}
         </div>
       )}
 
       {/* Info */}
-      <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-blue-700 space-y-1.5">
+      <div className="space-y-1.5 rounded-xl border border-border bg-muted/40 p-4 text-sm text-foreground">
         <p className="font-medium">¿Cómo funciona?</p>
-        <ul className="list-disc list-inside space-y-0.5 text-blue-600 text-xs">
+        <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">
           <li>El bot ve el nombre de cada PDF en el contexto de la conversación.</li>
           <li>Cuando el cliente pida algo que coincida, el bot envía el PDF automáticamente.</li>
           <li>
-            Ejemplo: si subes un PDF llamado <strong>"Decoraciones"</strong>, cuando el
-            cliente pregunte "¿qué opciones de decoración tienen?" el bot lo enviará.
+            Ejemplo: si subes un PDF llamado{" "}
+            <strong className="text-foreground">&quot;Decoraciones&quot;</strong>, cuando el
+            cliente pregunte &quot;¿qué opciones de decoración tienen?&quot; el bot lo enviará.
           </li>
           <li>Puedes renombrar cualquier documento haciendo clic en el ícono del lápiz.</li>
         </ul>
