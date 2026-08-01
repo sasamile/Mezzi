@@ -10,6 +10,8 @@ export type LoginSidePanel = "image" | "dashed-grid";
 export type LoginBranding = {
   logoSrc: string;
   logoAlt: string;
+  /** Nombre de la marca para el encabezado: "Iniciar sesión en {brandName}". */
+  brandName: string;
   subtitle: string;
   sideImageSrc: string;
   sideImageAlt: string;
@@ -26,10 +28,17 @@ type HostBrandingOverride = {
   login?: Partial<Omit<LoginBranding, "sidePanel">> & { sidePanel?: LoginSidePanel };
 };
 
+/**
+ * Subtítulo por defecto. El login no lo pinta: no dice nada que el formulario
+ * no diga ya. Solo aparece cuando un tenant configura uno propio.
+ */
+export const DEFAULT_LOGIN_SUBTITLE = "Ingresa tus credenciales para continuar.";
+
 const DEFAULT_LOGIN: LoginBranding = {
   logoSrc: "/logos/mezzi.svg",
   logoAlt: "Logo Mezzi",
-  subtitle: "Ingresa tus credenciales para continuar.",
+  brandName: "Mezzi",
+  subtitle: DEFAULT_LOGIN_SUBTITLE,
   sideImageSrc: "/login.png",
   sideImageAlt: "Imagen de acceso Mezzi",
   sidePanel: "dashed-grid",
@@ -159,6 +168,10 @@ export function getLoginBranding(
     return {
       logoSrc: logo,
       logoAlt: override?.login?.logoAlt ?? `Logo ${tenant.name}`,
+      brandName:
+        override?.login?.brandName ??
+        override?.title.split("|")[0]?.trim() ??
+        tenant.name,
       subtitle: override?.login?.subtitle ?? DEFAULT_LOGIN.subtitle,
       sideImageSrc: override?.login?.sideImageSrc ?? DEFAULT_LOGIN.sideImageSrc,
       sideImageAlt: override?.login?.sideImageAlt ?? DEFAULT_LOGIN.sideImageAlt,
@@ -171,13 +184,12 @@ export function getLoginBranding(
   }
 
   if (override) {
+    const fromTitle = override.title.split("|")[0]?.trim();
     return {
       ...DEFAULT_LOGIN,
       logoSrc: override.login?.logoSrc ?? override.icon,
-      logoAlt:
-        override.login?.logoAlt ??
-        override.title.split("|")[0]?.trim() ??
-        DEFAULT_LOGIN.logoAlt,
+      logoAlt: override.login?.logoAlt ?? fromTitle ?? DEFAULT_LOGIN.logoAlt,
+      brandName: override.login?.brandName ?? fromTitle ?? DEFAULT_LOGIN.brandName,
       accentColor: override.login?.accentColor,
       ...override.login,
     };
