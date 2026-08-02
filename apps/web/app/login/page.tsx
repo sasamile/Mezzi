@@ -415,25 +415,21 @@ function LoginContent() {
 
       {useSideImage ? (
         <aside
-          className="relative hidden overflow-hidden bg-[#0c0c0c] md:block"
+          className="relative hidden overflow-hidden bg-[#f4f4f5] md:block"
           aria-hidden
         >
-          <Image
-            src={branding.sideImageSrc}
-            alt={branding.sideImageAlt}
-            fill
-            priority
-            sizes="50vw"
-            className="object-cover object-center"
-            unoptimized={branding.sideImageSrc.startsWith("/")}
-          />
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(90deg, rgba(0,0,0,0.18) 0%, transparent 18%), linear-gradient(180deg, transparent 70%, rgba(0,0,0,0.35) 100%)",
-            }}
-          />
+          {/* contain: la pieza es vertical (~3:4); cover la cortaba a los lados. */}
+          <div className="absolute inset-4 lg:inset-6">
+            <Image
+              src={branding.sideImageSrc}
+              alt={branding.sideImageAlt}
+              fill
+              priority
+              sizes="50vw"
+              className="object-contain object-center"
+              unoptimized={branding.sideImageSrc.startsWith("/")}
+            />
+          </div>
         </aside>
       ) : (
         <BrandPanel
