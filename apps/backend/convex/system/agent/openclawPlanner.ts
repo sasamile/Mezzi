@@ -5,6 +5,7 @@
  * Env:
  *   OPENCLAW_GATEWAY_URL
  *   OPENCLAW_AUTH_TOKEN
+ *   OPENCLAW_PLANNER_DISABLED — "1" salta el gateway y cae directo a OpenAI
  *   OPENCLAW_RESPONSES_MODEL (default openclaw:main)
  *   OPENCLAW_REQUEST_TIMEOUT_MS (default 25000)
  *   OPENCLAW_TENANT_PROMPT_MAX_CHARS (default 120000) — prompt del restaurante casi completo
@@ -217,6 +218,7 @@ Reglas globales:
 - PQRS: cuando el manual diga "llama a createPQRTool" o el cliente haya dado tipo + asunto + descripción, emite side_effect create_pqr. NO sigas preguntando si ya tienes los 3 datos. BUSCA en todo el dialogHint (historial): si el cliente ya describió su queja/problema en un turno anterior, usa esa descripción como "description" y genera un "subject" resumido. El "type" se infiere del contexto (queja sobre comida/atención = complaint; sugerencia = suggestion; etc.). El "subject" es un resumen breve (~10 palabras). La "description" es lo que contó el cliente. NUNCA pidas al cliente que repita lo que ya dijo. SIEMPRE incluye "module" según el flujo del manual (calidad_alimentos, limpieza, facturacion, domicilios, sugerencias, infraestructura, trabaja_nosotros, proveedores) y "customerCity" si el cliente indicó sede/ciudad.
 - Reservas: solo con datos completos (nombre, fecha, hora, personas).
 - CONTEXTO DE CONVERSACIÓN: dialogHint contiene el historial reciente de la conversación completa. Lee TODO el historial antes de responder. Si el cliente ya proporcionó cualquier dato (nombre, email, sede, descripción de queja, barrio, ciudad, etc.) en turnos anteriores, úsalo directamente. NUNCA vuelvas a pedir información que el cliente ya dio en el historial. Esto es CRÍTICO para el flujo de PQRS: si el cliente ya describió su problema, usa esa descripción para crear el ticket inmediatamente.
+- REINICIO POR SALUDO: si dialogHint indica "REINICIO POR SALUDO" o el clienteMessage es solo un saludo (Hola, Buenos días, etc.), IGNORA el flujo anterior (PQRS a medias, etc.) y responde con el menú principal de bienvenida. NUNCA digas "continuar con tu PQRS" ante un saludo puro.
 ${refinement ? "- PASADA DE REFINADO: ya recibiste vacancyLookupFromConvex o productLookupFromConvex. Redacta usando SOLO esa lista. side_effect null salvo PDF/reserva/escalar/cerrar.\n" : ""}`;
   return base;
 }
@@ -234,13 +236,27 @@ export async function restaurantTurnWithOpenClaw(
     process.env.OPENCLAW_RESPONSES_MODEL ?? "openclaw:main";
   const timeoutMs = Math.min(
     Math.max(
-      parseInt(process.env.OPENCLAW_REQUEST_TIMEOUT_MS ?? "25000", 10) || 25000,
+      parseInt(process.env.OPENCLAW_REQUEST_TIMEOUT_MS ?? "12000", 10) || 12000,
       5000
     ),
     120000
   );
 
   if (!authToken) return null;
+
+  /**
+   * Interruptor del planner, separado a propósito de OPENCLAW_AUTH_TOKEN.
+   *
+   * Ese token no solo elige el planner: es también el flag de "modo
+   * OpenClaw-only" que apaga los embeddings (knowledge.ts, search.ts,
+   * chatEmpresa.ts). Quitarlo para esquivar un gateway lento dejaría al bot
+   * buscando en un índice vectorial que nunca se generó, es decir, sin base de
+   * conocimiento. Este flag salta solo la llamada al gateway.
+   *
+   * Sin esto, con el gateway lento cada mensaje quemaba el timeout completo en
+   * una llamada condenada a fallar antes de siquiera empezar con OpenAI.
+   */
+  if (process.env.OPENCLAW_PLANNER_DISABLED === "1") return null;
 
   const refinement = Boolean(
     input.vacancyRefinementPass || input.productRefinementPass

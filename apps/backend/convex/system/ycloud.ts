@@ -585,11 +585,28 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
         // continúa sin historial — el fallback es lastBotMessage
       }
 
-      const lastQuestionContext = recentDialogHistory
+      const lastQuestionContextRaw = recentDialogHistory
         ? recentDialogHistory
         : lastAssistantText.trim()
           ? `[TU ÚLTIMO MENSAJE AL CLIENTE:]\n"${lastAssistantText.trim()}"\n[El cliente respondió a ese mensaje. Su intención ya está indicada en el texto anterior.]\n\n`
           : "";
+
+      // Saludo puro (Hola / Buenos días…) tras un flujo a medias → el cliente
+      // quiere empezar de nuevo, no "continuar con tu PQRS". Sin esto, el
+      // historial + la regla de flujo activo hacen que el modelo ignore el saludo.
+      const isGreetingRestart =
+        /^(hola+|holi|hey|hi|hello|buenas?|buenos?\s*d[ií]as?|buenas?\s*tardes?|buenas?\s*noches?|buen\s*d[ií]a)([!.\s]*)$/i.test(
+          clientText.trim()
+        );
+      const lastQuestionContext =
+        isGreetingRestart && lastQuestionContextRaw
+          ? `[REINICIO POR SALUDO — PRIORIDAD ABSOLUTA]\n` +
+            `El cliente escribió solo un saludo ("${clientText.trim()}") después de un flujo anterior.\n` +
+            `Abandona por completo ese flujo (PQRS, reserva, pedido, vacantes, etc.).\n` +
+            `NO digas "continuar con tu PQRS", NO preguntes nombre/anónimo ni retomes el paso anterior.\n` +
+            `Responde con el menú principal de bienvenida como si fuera una conversación nueva.\n` +
+            `El historial anterior queda CANCELADO para este turno.\n\n`
+          : lastQuestionContextRaw;
 
       // ─── Pre-búsqueda RAG ────────────────────────────────────────────────────
 
@@ -979,23 +996,23 @@ ${customer.preferences ? `Preferencias: ${customer.preferences}` : ""}
           } catch (e) {
             console.warn("YCloud OpenClaw: saveMessage hilo", e);
           }
-        } else {
-          try {
-            await ctx.runAction(internal.ycloud.sendWhatsAppMessageInternal, {
-              tenantId: args.tenantId,
-              conversationId: args.conversationId,
-              content:
-                "Lo sentimos, el asistente no está disponible en este momento. Intenta de nuevo en unos minutos o escribe al restaurante. 🙏",
-            });
-          } catch {
-            /* ignorar */
-          }
+
+          await ctx.runMutation(internal.system.conversations.updateLastMessageAt, {
+            threadId: args.threadId,
+          });
+          return;
         }
 
-        await ctx.runMutation(internal.system.conversations.updateLastMessageAt, {
-          threadId: args.threadId,
-        });
-        return;
+        // OpenClaw falló (timeout/HTTP/JSON). Antes mandábamos "Lo sentimos" y
+        // cortábamos; ahora caemos al supportAgent (OpenAI) para no dejar al
+        // cliente sin respuesta cuando el gateway flaquea.
+        console.warn(
+          "YCloud OpenClaw: sin turno válido; fallback a supportAgent (OpenAI)",
+          {
+            tenantId: args.tenantId,
+            conversationId: args.conversationId,
+          }
+        );
       }
 
       // ─── Ramal supportAgent (OpenAI) ────────────────────────────────────────
