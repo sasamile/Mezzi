@@ -476,12 +476,39 @@ export default defineSchema({
       )
     ),
     conversationId: v.optional(v.id("conversations")),
+
+    /**
+     * Trazabilidad de la notificación por correo.
+     *
+     * Antes el envío solo dejaba una línea de log: si Brevo fallaba, la PQR
+     * quedaba registrada igual y nadie se enteraba de que el restaurante nunca
+     * recibió el aviso. El cliente sí tenía su número de ticket, así que el
+     * fallo era invisible por los dos lados.
+     *
+     * `emailStatus` es la fuente de verdad de si esta PQR fue notificada.
+     */
+    emailStatus: v.optional(
+      v.union(v.literal("sent"), v.literal("failed"))
+    ),
+    /** Momento del último intento, con éxito o sin él. */
+    emailLastAttemptAt: v.optional(v.number()),
+    /** Momento del último envío correcto. Se conserva aunque un reenvío falle. */
+    emailSentAt: v.optional(v.number()),
+    emailTo: v.optional(v.array(v.string())),
+    emailCc: v.optional(v.array(v.string())),
+    /** Motivo del último fallo, tal cual, para poder actuar sobre él. */
+    emailError: v.optional(v.string()),
+    /** Intentos totales, incluidos los reenvíos manuales desde el panel. */
+    emailAttempts: v.optional(v.number()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_created", ["tenantId", "createdAt"])
-    .index("by_tenant_status", ["tenantId", "status"]),
+    .index("by_tenant_status", ["tenantId", "status"])
+    /** Para listar de un vistazo las PQR cuya notificación falló. */
+    .index("by_tenant_email_status", ["tenantId", "emailStatus"]),
 
   // Integración Google Calendar por restaurante (OAuth tokens)
   googleCalendarIntegrations: defineTable({

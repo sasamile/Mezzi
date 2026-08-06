@@ -880,7 +880,74 @@ export default function PQRsPage() {
                 <p className="text-sm font-medium text-foreground">
                   Notificación por correo
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+
+                {/*
+                  Estado real del envío. Antes esta caja solo ofrecía reenviar,
+                  sin decir si el primer correo había salido: una PQR notificada
+                  y una que falló se veían idénticas.
+                */}
+                {detailPqr.emailStatus === "sent" ? (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      ✓ Notificado
+                      {detailPqr.emailSentAt
+                        ? ` el ${new Date(detailPqr.emailSentAt).toLocaleString("es-CO", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`
+                        : ""}
+                    </p>
+                    {detailPqr.emailTo && detailPqr.emailTo.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Para: {detailPqr.emailTo.join(", ")}
+                      </p>
+                    )}
+                    {detailPqr.emailCc && detailPqr.emailCc.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        CC: {detailPqr.emailCc.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                ) : detailPqr.emailStatus === "failed" ? (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs font-medium text-destructive">
+                      ⚠ El envío falló
+                      {detailPqr.emailLastAttemptAt
+                        ? ` el ${new Date(detailPqr.emailLastAttemptAt).toLocaleString("es-CO", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`
+                        : ""}
+                    </p>
+                    {detailPqr.emailError && (
+                      <p className="text-xs text-muted-foreground">
+                        Motivo: {detailPqr.emailError}
+                      </p>
+                    )}
+                    <p className="text-xs text-destructive">
+                      El área responsable no recibió esta PQR. Reenvíala.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
+                    Sin registro de envío. Puede ser anterior a esta función, o
+                    que la notificación nunca se intentara.
+                  </p>
+                )}
+
+                {typeof detailPqr.emailAttempts === "number" &&
+                  detailPqr.emailAttempts > 1 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {detailPqr.emailAttempts} intentos
+                    </p>
+                  )}
+
+                <p className="mt-2 text-xs text-muted-foreground">
                   Reenvía al área correspondiente. Incluye adjuntos si hay.
                 </p>
                 {resendMessage && (

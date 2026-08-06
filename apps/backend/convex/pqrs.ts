@@ -486,8 +486,93 @@ type PqrEmailResult =
   | { ok: true; to: string[]; cc: string[] }
   | { ok: false; error: string };
 
-/** Envía por Brevo la notificación de PQR al correo que corresponde según el módulo */
+/**
+ * Deja constancia del intento de notificación en la propia PQR.
+ *
+ * Se llama SIEMPRE, haya salido bien o mal. `emailSentAt` solo se toca cuando
+ * hay éxito, para que un reenvío fallido no borre la prueba de que la primera
+ * notificación sí llegó.
+ */
+export const recordEmailAttempt = internalMutation({
+  args: {
+    pqrId: v.id("pqrs"),
+    ok: v.boolean(),
+    to: v.optional(v.array(v.string())),
+    cc: v.optional(v.array(v.string())),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const pqr = await ctx.db.get(args.pqrId);
+    if (!pqr) return;
+
+    const now = Date.now();
+    const attempts = (pqr.emailAttempts ?? 0) + 1;
+
+    if (args.ok) {
+      await ctx.db.patch(args.pqrId, {
+        emailStatus: "sent",
+        emailLastAttemptAt: now,
+        emailSentAt: now,
+        emailTo: args.to ?? [],
+        emailCc: args.cc ?? [],
+        emailError: undefined,
+        emailAttempts: attempts,
+      });
+      return;
+    }
+
+    await ctx.db.patch(args.pqrId, {
+      emailStatus: "failed",
+      emailLastAttemptAt: now,
+      emailError: args.error ?? "Error desconocido",
+      emailAttempts: attempts,
+    });
+  },
+});
+
+/**
+ * Notificación por correo con trazabilidad.
+ *
+ * Envuelve al envío real para que el resultado quede guardado en la PQR pase lo
+ * que pase. Antes el resultado se descartaba: una PQR sin notificar se veía
+ * exactamente igual que una notificada, y el restaurante podía incumplir un
+ * plazo legal sin llegar a saber que existía la queja.
+ */
 export const sendPqrNotificationEmail = internalAction({
+  args: {
+    pqrId: v.id("pqrs"),
+    isResend: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<PqrEmailResult> => {
+    let result: PqrEmailResult;
+    try {
+      result = await ctx.runAction(internal.pqrs.sendPqrNotificationEmailRaw, {
+        pqrId: args.pqrId,
+        isResend: args.isResend,
+      });
+    } catch (e) {
+      // Una excepción no controlada (red, timeout) también es un fallo de
+      // notificación y tiene que quedar registrada como tal.
+      result = {
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+
+    await ctx.runMutation(internal.pqrs.recordEmailAttempt, {
+      pqrId: args.pqrId,
+      ok: result.ok,
+      to: result.ok ? result.to : undefined,
+      cc: result.ok ? result.cc : undefined,
+      error: result.ok ? undefined : result.error,
+    });
+
+    return result;
+  },
+});
+
+/** Envía por Brevo la notificación de PQR al correo que corresponde según el módulo */
+export const sendPqrNotificationEmailRaw = internalAction({
   args: {
     pqrId: v.id("pqrs"),
     isResend: v.optional(v.boolean()),
