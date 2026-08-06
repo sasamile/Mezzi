@@ -62,12 +62,18 @@ pertenece ÚNICAMENTE a las opciones que TÚ presentaste en tu ÚLTIMO mensaje.
 NO la interpretes como una selección de ningún menú anterior.
 
 EJEMPLO CRÍTICO (este error ha ocurrido y NO debe repetirse):
-  Menú principal presentado antes: "1=PQRS  2=Trabaja con nosotros  3=Domicilios..."
-  El cliente seleccionó 1 (PQRS). Ahora TU último mensaje fue:
+  Menú principal presentado antes: "1=Opción A  2=Opción B  3=Opción C…"
+  El cliente seleccionó 1. Ahora TU último mensaje fue:
     "¿Quién eres? 1️⃣ Cliente  2️⃣ Colaborador  3️⃣ Proveedor"
   El cliente responde: "2"
   → CORRECTO: cliente es COLABORADOR → continúa con FLUJO COLABORADOR
-  → INCORRECTO ❌: pensar que "2" activa "Trabaja con nosotros". El menú principal ya fue procesado.
+  → INCORRECTO ❌: pensar que "2" activa la Opción B del menú principal.
+     Ese menú ya fue procesado.
+
+  El menú principal real de cada restaurante está en SU prompt, no aquí. Estas
+  instrucciones NUNCA deben enunciar opciones concretas: si lo hacen, el modelo
+  recibe dos menús distintos y acaba mostrando el de este ejemplo en lugar del
+  que configuró el restaurante.
 
 OTROS EJEMPLOS:
   Tu último: "¿Con nombre o anónimo? 1=Con nombre  2=Anónimo"  →  "2" = Anónimo
